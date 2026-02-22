@@ -28,6 +28,33 @@
         "tsConfigPath": "apps/auth-service/tsconfig.app.json"
       }
     },
+    "test-service": {
+      "type": "application",
+      "root": "apps/test-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/test-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/test-service/tsconfig.app.json"
+      }
+    },
+    "submission-service": {
+      "type": "application",
+      "root": "apps/submission-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/submission-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/submission-service/tsconfig.app.json"
+      }
+    },
+    "analytics-service": {
+      "type": "application",
+      "root": "apps/analytics-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/analytics-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/analytics-service/tsconfig.app.json"
+      }
+    },
     "common": {
       "type": "library",
       "root": "libs/common",

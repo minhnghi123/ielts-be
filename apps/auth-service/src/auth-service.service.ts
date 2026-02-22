@@ -21,7 +21,7 @@ export class AuthServiceService {
     @InjectRepository(LearnerProfile)
     private readonly learnerProfileRepository: Repository<LearnerProfile>,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async registerLearner(registerDto: RegisterLearnerDto) {
     const { email, password, confirmPassword } = registerDto;
@@ -78,7 +78,7 @@ export class AuthServiceService {
     });
 
     if (!account) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Account not found');
     }
 
     // Verify password
