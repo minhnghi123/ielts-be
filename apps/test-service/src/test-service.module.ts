@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { MulterModule } from '@nestjs/platform-express';
 import { TestServiceController } from './test-service.controller';
 import { TestServiceService } from './test-service.service';
+import { DocxParserService } from './import/docx-parser.service';
+import { ImportTestService } from './import/import-test.service';
 import { Test } from './entities/test.entity';
 import { Section } from './entities/section.entity';
 import { Question } from './entities/question.entity';
@@ -21,10 +24,10 @@ import { SpeakingPart } from './entities/speaking-part.entity';
             host: process.env.DB_HOST || 'localhost',
             port: parseInt(process.env.DB_PORT || '5432', 10),
             username: process.env.DB_USERNAME || 'postgres',
-            password: process.env.DB_PASSWORD || 'postgres',
+            password: process.env.DB_PASSWORD || '123Minhnghi@',
             database: process.env.DB_NAME || 'postgres',
             entities: [Test, Section, Question, QuestionAnswer, WritingTask, SpeakingPart],
-            synchronize: false, // DB schema is managed by db/database_schema.sql
+            synchronize: false,
         }),
         TypeOrmModule.forFeature([
             Test,
@@ -34,8 +37,9 @@ import { SpeakingPart } from './entities/speaking-part.entity';
             WritingTask,
             SpeakingPart,
         ]),
+        MulterModule.register({ limits: { fileSize: 50 * 1024 * 1024 } }),
     ],
     controllers: [TestServiceController],
-    providers: [TestServiceService],
+    providers: [TestServiceService, DocxParserService, ImportTestService],
 })
 export class TestServiceModule { }

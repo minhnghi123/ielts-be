@@ -11,8 +11,14 @@ import {
     ParseUUIDPipe,
     HttpCode,
     HttpStatus,
+    UseInterceptors,
+    UploadedFile,
+    UploadedFiles,
+    BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor, FilesInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { TestServiceService } from './test-service.service';
+import { ImportTestService } from './import/import-test.service';
 import { CreateTestDto } from './dto/create-test.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
@@ -24,12 +30,59 @@ import {
     ApiOperation,
     ApiResponse,
     ApiBearerAuth,
+    ApiConsumes,
+    ApiBody,
 } from '@nestjs/swagger';
+
+const DEFAULT_ADMIN_ID = process.env.ADMIN_PROFILE_ID || 'a1b2c3d4-0000-0000-0000-000000000001';
 
 @ApiTags('Tests')
 @Controller()
 export class TestServiceController {
-    constructor(private readonly testService: TestServiceService) { }
+    constructor(
+        private readonly testService: TestServiceService,
+        private readonly importTestService: ImportTestService,
+    ) { }
+
+    // ─── Import ───────────────────────────────────────────────────────────────────
+
+    @Post('tests/import')
+    @ApiOperation({ summary: 'Import a test from a .docx file (multipart). Add ?preview=true for dry-run.' })
+    @ApiConsumes('multipart/form-data')
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                file: { type: 'string', format: 'binary', description: '.docx question file' },
+                audioFiles: { type: 'array', items: { type: 'string', format: 'binary' }, description: 'MP3 audio files (optional)' },
+                adminId: { type: 'string', description: 'Admin profile UUID (optional, uses default)' },
+            },
+        },
+    })
+    @UseInterceptors(AnyFilesInterceptor())
+    async importTest(
+        @UploadedFiles() files: Express.Multer.File[],
+        @Query('preview') preview: string,
+        @Body('adminId') adminId?: string,
+    ) {
+        const docx = files?.find((f) => f.fieldname === 'file' || f.originalname.endsWith('.docx'));
+        if (!docx) throw new BadRequestException('A .docx file is required (field name: "file")');
+
+        const audioUrls: Record<string, string> = {};
+        // Audio files are stored in-memory for now; in production, upload to S3/CDN
+        // For the preview endpoint we just note the filename
+        const audioFiles = files?.filter((f) => f.fieldname === 'audioFiles' || f.originalname.endsWith('.mp3'));
+        audioFiles?.forEach((af) => {
+            // Placeholder URL – in a real deployment, upload to cloud storage first
+            audioUrls[af.originalname] = `/audio/${af.originalname}`;
+        });
+
+        return this.importTestService.importFromBuffer(docx.buffer, {
+            adminProfileId: adminId || DEFAULT_ADMIN_ID,
+            audioUrls,
+            dryRun: preview === 'true',
+        });
+    }
 
     // ─── Tests ───────────────────────────────────────────────────────────────────
 
