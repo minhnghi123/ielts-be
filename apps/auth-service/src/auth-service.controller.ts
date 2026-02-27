@@ -5,6 +5,7 @@ import {
   Get,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { AuthServiceService } from './auth-service.service';
 import { RegisterLearnerDto } from './dto/register.dto';
@@ -20,7 +21,7 @@ import {
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthServiceController {
-  constructor(private readonly authService: AuthServiceService) {}
+  constructor(private readonly authService: AuthServiceService) { }
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new learner account' })
@@ -64,5 +65,22 @@ export class AuthServiceController {
   })
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user.sub);
+  }
+
+  @Get('users')
+  // @UseGuards(JwtAuthGuard) // Will uncomment when admin roles are verified via JWT
+  @ApiOperation({ summary: 'Get list of users (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated user list',
+  })
+  async getUsers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.authService.getUsers(pageNum, limitNum, search);
   }
 }

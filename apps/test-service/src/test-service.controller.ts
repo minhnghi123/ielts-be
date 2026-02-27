@@ -25,6 +25,7 @@ import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
 import { QueryTestsDto } from './dto/query-tests.dto';
+import { CreateManualTestDto } from './dto/create-manual-test.dto';
 import {
     ApiTags,
     ApiOperation,
@@ -107,6 +108,14 @@ export class TestServiceController {
     @ApiResponse({ status: 201, description: 'Test created' })
     createTest(@Body() dto: CreateTestDto) {
         return this.testService.createTest(dto);
+    }
+
+    @Post('tests/manual')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Create a new test manually with nested sections, questions, and answers' })
+    @ApiResponse({ status: 201, description: 'Manual test created successfully' })
+    createManualTest(@Body() dto: CreateManualTestDto) {
+        return this.testService.createManualTest(dto);
     }
 
     @Put('tests/:id')

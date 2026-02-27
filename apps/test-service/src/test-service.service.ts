@@ -3,7 +3,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere } from 'typeorm';
+import { Repository, FindOptionsWhere, DataSource } from 'typeorm';
 import { Test } from './entities/test.entity';
 import { Section } from './entities/section.entity';
 import { Question } from './entities/question.entity';
@@ -16,6 +16,7 @@ import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
 import { QueryTestsDto } from './dto/query-tests.dto';
+import { CreateManualTestDto } from './dto/create-manual-test.dto';
 
 @Injectable()
 export class TestServiceService {
@@ -32,6 +33,7 @@ export class TestServiceService {
         private readonly writingTaskRepo: Repository<WritingTask>,
         @InjectRepository(SpeakingPart)
         private readonly speakingPartRepo: Repository<SpeakingPart>,
+        private readonly dataSource: DataSource,
     ) { }
 
     // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -86,6 +88,69 @@ export class TestServiceService {
             createdBy: dto.createdBy,
         });
         return this.testRepo.save(test);
+    }
+
+    async createManualTest(dto: CreateManualTestDto): Promise<Test> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
+        try {
+            // 1. Create Test
+            const test = queryRunner.manager.create(Test, {
+                skill: dto.skill,
+                title: dto.title,
+                isMock: dto.isMock,
+                createdBy: dto.createdBy,
+            });
+            const savedTest = await queryRunner.manager.save(Test, test);
+
+            // 2. Create Sections
+            if (dto.sections && dto.sections.length > 0) {
+                for (const sectionDto of dto.sections) {
+                    const section = queryRunner.manager.create(Section, {
+                        testId: savedTest.id,
+                        sectionOrder: sectionDto.sectionOrder,
+                        passage: sectionDto.passage,
+                        audioUrl: sectionDto.audioUrl,
+                        timeLimit: sectionDto.timeLimit,
+                    });
+                    const savedSection = await queryRunner.manager.save(Section, section);
+
+                    // 3. Create Questions & Answers
+                    if (sectionDto.questions && sectionDto.questions.length > 0) {
+                        for (const questionDto of sectionDto.questions) {
+                            const question = queryRunner.manager.create(Question, {
+                                sectionId: savedSection.id,
+                                questionOrder: questionDto.questionOrder,
+                                questionType: questionDto.questionType,
+                                questionText: questionDto.questionText,
+                                config: questionDto.config,
+                                explanation: questionDto.explanation,
+                            });
+                            const savedQuestion = await queryRunner.manager.save(Question, question);
+
+                            if (questionDto.answer) {
+                                const answer = queryRunner.manager.create(QuestionAnswer, {
+                                    questionId: savedQuestion.id,
+                                    correctAnswers: questionDto.answer.correctAnswers,
+                                    caseSensitive: questionDto.answer.caseSensitive,
+                                });
+                                await queryRunner.manager.save(QuestionAnswer, answer);
+                            }
+                        }
+                    }
+                }
+            }
+
+            await queryRunner.commitTransaction();
+            return this.getTestById(savedTest.id);
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
     }
 
     async updateTest(id: string, dto: Partial<CreateTestDto>): Promise<Test> {

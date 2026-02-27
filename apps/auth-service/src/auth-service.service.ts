@@ -143,4 +143,42 @@ export class AuthServiceService {
   async getProfile(userId: string) {
     return this.validateUser(userId);
   }
+
+  async getUsers(page: number = 1, limit: number = 10, search?: string) {
+    const queryBuilder = this.accountRepository.createQueryBuilder('account')
+      .leftJoinAndSelect('account.learnerProfile', 'learnerProfile')
+      .leftJoinAndSelect('account.adminProfile', 'adminProfile')
+      .orderBy('account.createdAt', 'DESC');
+
+    if (search) {
+      queryBuilder.where('account.email ILIKE :search', { search: `%${search}%` });
+    }
+
+    const [accounts, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const formattedAccounts = accounts.map((account) => {
+      const role = account.adminProfile ? 'admin' : 'learner';
+      const level = account.learnerProfile?.currentLevel;
+
+      return {
+        id: account.id,
+        email: account.email,
+        status: account.status,
+        role,
+        level,
+        createdAt: account.createdAt,
+      };
+    });
+
+    return {
+      data: formattedAccounts,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 }
