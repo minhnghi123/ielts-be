@@ -255,10 +255,10 @@ export class DocxParserService {
                     const qNum = parseInt(numMatch[1], 10);
                     const qText = numMatch[2];
                     i++;
-                    const options: { label: string; text: string }[] = [];
+                    const options: string[] = [];
                     while (i < lines.length && /^[A-D]\.\s+/.test(lines[i])) {
-                        const opt = lines[i].match(/^([A-D])\.\s+(.+)/);
-                        if (opt) options.push({ label: opt[1], text: opt[2] });
+                        const opt = lines[i].match(/^[A-D]\.\s+(.+)/);
+                        if (opt) options.push(opt[1]);
                         i++;
                     }
                     let answer = '';

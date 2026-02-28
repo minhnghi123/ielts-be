@@ -18,11 +18,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
+      host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT || '5432', 10),
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_NAME || 'auth_db',
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
       entities: [Account, LearnerProfile, AdminProfile],
       synchronize: process.env.NODE_ENV !== 'production',
     }),
@@ -36,4 +36,4 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   controllers: [AuthServiceController],
   providers: [AuthServiceService, JwtStrategy],
 })
-export class AuthServiceModule {}
+export class AuthServiceModule { }
