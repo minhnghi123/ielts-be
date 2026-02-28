@@ -1,11 +1,13 @@
 import {
     Injectable,
     NotFoundException,
+    BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, DataSource } from 'typeorm';
 import { Test } from './entities/test.entity';
 import { Section } from './entities/section.entity';
+import { QuestionGroup } from './entities/question-group.entity';
 import { Question } from './entities/question.entity';
 import { QuestionAnswer } from './entities/question-answer.entity';
 import { WritingTask } from './entities/writing-task.entity';
@@ -25,6 +27,8 @@ export class TestServiceService {
         private readonly testRepo: Repository<Test>,
         @InjectRepository(Section)
         private readonly sectionRepo: Repository<Section>,
+        @InjectRepository(QuestionGroup)
+        private readonly questionGroupRepo: Repository<QuestionGroup>,
         @InjectRepository(Question)
         private readonly questionRepo: Repository<Question>,
         @InjectRepository(QuestionAnswer)
@@ -65,8 +69,9 @@ export class TestServiceService {
             where: { id },
             relations: [
                 'sections',
-                'sections.questions',
-                'sections.questions.answer',
+                'sections.questionGroups',
+                'sections.questionGroups.questions',
+                'sections.questionGroups.questions.answer',
                 'writingTasks',
                 'speakingParts',
             ],
@@ -105,6 +110,24 @@ export class TestServiceService {
             });
             const savedTest = await queryRunner.manager.save(Test, test);
 
+            // Validate test structure dynamically (Relaxed for testing framework)
+            if (
+                dto.skill === 'listening' &&
+                (!dto.sections || dto.sections.length < 1)
+            ) {
+                throw new BadRequestException(
+                    'Listening tests must have at least 1 section',
+                );
+            }
+            if (
+                dto.skill === 'reading' &&
+                (!dto.sections || dto.sections.length < 1)
+            ) {
+                throw new BadRequestException(
+                    'Reading tests must have at least 1 passage (section)',
+                );
+            }
+
             // 2. Create Sections
             if (dto.sections && dto.sections.length > 0) {
                 for (const sectionDto of dto.sections) {
@@ -113,30 +136,47 @@ export class TestServiceService {
                         sectionOrder: sectionDto.sectionOrder,
                         passage: sectionDto.passage,
                         audioUrl: sectionDto.audioUrl,
-                        timeLimit: sectionDto.timeLimit,
                     });
                     const savedSection = await queryRunner.manager.save(Section, section);
 
-                    // 3. Create Questions & Answers
-                    if (sectionDto.questions && sectionDto.questions.length > 0) {
-                        for (const questionDto of sectionDto.questions) {
-                            const question = queryRunner.manager.create(Question, {
+                    // 3. Create Question Groups
+                    if (sectionDto.groups && sectionDto.groups.length > 0) {
+                        for (const groupDto of sectionDto.groups) {
+                            const group = queryRunner.manager.create(QuestionGroup, {
                                 sectionId: savedSection.id,
-                                questionOrder: questionDto.questionOrder,
-                                questionType: questionDto.questionType,
-                                questionText: questionDto.questionText,
-                                config: questionDto.config,
-                                explanation: questionDto.explanation,
+                                groupOrder: groupDto.groupOrder,
+                                instructions: groupDto.instructions,
                             });
-                            const savedQuestion = await queryRunner.manager.save(Question, question);
+                            const savedGroup = await queryRunner.manager.save(
+                                QuestionGroup,
+                                group,
+                            );
 
-                            if (questionDto.answer) {
-                                const answer = queryRunner.manager.create(QuestionAnswer, {
-                                    questionId: savedQuestion.id,
-                                    correctAnswers: questionDto.answer.correctAnswers,
-                                    caseSensitive: questionDto.answer.caseSensitive,
-                                });
-                                await queryRunner.manager.save(QuestionAnswer, answer);
+                            // 4. Create Questions & Answers
+                            if (groupDto.questions && groupDto.questions.length > 0) {
+                                for (const questionDto of groupDto.questions) {
+                                    const question = queryRunner.manager.create(Question, {
+                                        questionGroupId: savedGroup.id,
+                                        questionOrder: questionDto.questionOrder,
+                                        questionType: questionDto.questionType,
+                                        questionText: questionDto.questionText,
+                                        config: questionDto.config,
+                                        explanation: questionDto.explanation,
+                                    });
+                                    const savedQuestion = await queryRunner.manager.save(
+                                        Question,
+                                        question,
+                                    );
+
+                                    if (questionDto.answer) {
+                                        const answer = queryRunner.manager.create(QuestionAnswer, {
+                                            questionId: savedQuestion.id,
+                                            correctAnswers: questionDto.answer.correctAnswers,
+                                            caseSensitive: questionDto.answer.caseSensitive,
+                                        });
+                                        await queryRunner.manager.save(QuestionAnswer, answer);
+                                    }
+                                }
                             }
                         }
                     }
@@ -173,7 +213,11 @@ export class TestServiceService {
     async getSectionsByTestId(testId: string): Promise<Section[]> {
         return this.sectionRepo.find({
             where: { testId },
-            relations: ['questions', 'questions.answer'],
+            relations: [
+                'questionGroups',
+                'questionGroups.questions',
+                'questionGroups.questions.answer',
+            ],
             order: { sectionOrder: 'ASC' },
         });
     }
@@ -188,37 +232,43 @@ export class TestServiceService {
         sectionId: string,
         dto: Partial<CreateSectionDto>,
     ): Promise<Section> {
-        const section = await this.sectionRepo.findOne({ where: { id: sectionId } });
-        if (!section) throw new NotFoundException(`Section #${sectionId} not found`);
+        const section = await this.sectionRepo.findOne({
+            where: { id: sectionId },
+        });
+        if (!section)
+            throw new NotFoundException(`Section #${sectionId} not found`);
         Object.assign(section, dto);
         return this.sectionRepo.save(section);
     }
 
     async deleteSection(sectionId: string): Promise<void> {
-        const section = await this.sectionRepo.findOne({ where: { id: sectionId } });
-        if (!section) throw new NotFoundException(`Section #${sectionId} not found`);
+        const section = await this.sectionRepo.findOne({
+            where: { id: sectionId },
+        });
+        if (!section)
+            throw new NotFoundException(`Section #${sectionId} not found`);
         await this.sectionRepo.remove(section);
     }
 
     // ─── Questions ────────────────────────────────────────────────────────────────
 
-    async getQuestionsBySectionId(sectionId: string): Promise<Question[]> {
+    async getQuestionsByGroupId(questionGroupId: string): Promise<Question[]> {
         return this.questionRepo.find({
-            where: { sectionId },
+            where: { questionGroupId },
             relations: ['answer'],
             order: { questionOrder: 'ASC' },
         });
     }
 
     async createQuestion(
-        sectionId: string,
+        questionGroupId: string,
         dto: CreateQuestionDto,
     ): Promise<Question | null> {
-        const section = await this.sectionRepo.findOne({ where: { id: sectionId } });
-        if (!section) throw new NotFoundException(`Section #${sectionId} not found`);
+        const group = await this.questionGroupRepo.findOne({ where: { id: questionGroupId } });
+        if (!group) throw new NotFoundException(`QuestionGroup #${questionGroupId} not found`);
 
         const question = this.questionRepo.create({
-            sectionId,
+            questionGroupId,
             questionOrder: dto.questionOrder,
             questionType: dto.questionType,
             questionText: dto.questionText,
@@ -248,7 +298,8 @@ export class TestServiceService {
             where: { id: questionId },
             relations: ['answer'],
         });
-        if (!question) throw new NotFoundException(`Question #${questionId} not found`);
+        if (!question)
+            throw new NotFoundException(`Question #${questionId} not found`);
 
         if (dto.questionText) question.questionText = dto.questionText;
         if (dto.questionType) question.questionType = dto.questionType;
@@ -273,7 +324,8 @@ export class TestServiceService {
         const question = await this.questionRepo.findOne({
             where: { id: questionId },
         });
-        if (!question) throw new NotFoundException(`Question #${questionId} not found`);
+        if (!question)
+            throw new NotFoundException(`Question #${questionId} not found`);
         await this.questionRepo.remove(question);
     }
 

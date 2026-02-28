@@ -12,34 +12,44 @@ import { Question } from './entities/question.entity';
 import { QuestionAnswer } from './entities/question-answer.entity';
 import { WritingTask } from './entities/writing-task.entity';
 import { SpeakingPart } from './entities/speaking-part.entity';
+import { QuestionGroup } from './entities/question-group.entity';
 
 @Module({
-    imports: [
-        ConfigModule.forRoot({
-            isGlobal: true,
-            envFilePath: './apps/test-service/.env',
-        }),
-        TypeOrmModule.forRoot({
-            type: 'postgres',
-            host: process.env.DB_HOST,
-            port: parseInt(process.env.DB_PORT || '5432', 10),
-            username: process.env.DB_USERNAME,
-            password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME,
-            entities: [Test, Section, Question, QuestionAnswer, WritingTask, SpeakingPart],
-            synchronize: false,
-        }),
-        TypeOrmModule.forFeature([
-            Test,
-            Section,
-            Question,
-            QuestionAnswer,
-            WritingTask,
-            SpeakingPart,
-        ]),
-        MulterModule.register({ limits: { fileSize: 50 * 1024 * 1024 } }),
-    ],
-    controllers: [TestServiceController],
-    providers: [TestServiceService, DocxParserService, ImportTestService],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: './apps/test-service/.env',
+    }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      entities: [
+        Test,
+        Section,
+        QuestionGroup,
+        Question,
+        QuestionAnswer,
+        WritingTask,
+        SpeakingPart,
+      ],
+      synchronize: false,
+    }),
+    TypeOrmModule.forFeature([
+      Test,
+      Section,
+      QuestionGroup,
+      Question,
+      QuestionAnswer,
+      WritingTask,
+      SpeakingPart,
+    ]),
+    MulterModule.register({ limits: { fileSize: 50 * 1024 * 1024 } }),
+  ],
+  controllers: [TestServiceController],
+  providers: [TestServiceService, DocxParserService, ImportTestService],
 })
 export class TestServiceModule { }

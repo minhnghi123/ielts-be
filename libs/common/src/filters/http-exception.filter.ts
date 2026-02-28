@@ -27,6 +27,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getResponse()
         : 'Internal server error';
 
+    if (!(exception instanceof HttpException)) {
+      this.logger.error('Raw Exception:', exception);
+    }
+
     this.logger.error(
       `Http Status: ${status} Error Message: ${JSON.stringify(message)}`,
     );
@@ -36,6 +40,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
       error: message,
+      rawException: process.env.NODE_ENV !== 'production' && !(exception instanceof HttpException) ? (exception as any).message || exception : undefined,
     });
   }
 }
