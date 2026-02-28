@@ -33,7 +33,6 @@ export class ProxyService {
             url: targetUrl,
             method,
             headers,
-            params: req.query,
             data: ['post', 'put', 'patch'].includes(method) ? req.body : undefined,
             // Don't throw on non-2xx — let the downstream response pass through
             validateStatus: () => true,

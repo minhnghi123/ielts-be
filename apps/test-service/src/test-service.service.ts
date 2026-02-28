@@ -43,11 +43,11 @@ export class TestServiceService {
     // ─── Tests ───────────────────────────────────────────────────────────────────
 
     async getTests(query: QueryTestsDto) {
-        const { skill, isMock, page = 1, limit = 12 } = query;
+        const { skill, isMock, page, limit } = query;
         const where: FindOptionsWhere<Test> = {};
         if (skill) where.skill = skill as any;
         if (isMock !== undefined) where.isMock = isMock;
-
+        console.log(typeof page, typeof limit);
         const [data, total] = await this.testRepo.findAndCount({
             where,
             order: { createdAt: 'DESC' },

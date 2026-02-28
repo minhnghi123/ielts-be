@@ -21,12 +21,12 @@ export class QueryTestsDto {
   @Min(1)
   @IsOptional()
   @Type(() => Number)
-  page?: number = 1;
+  page: number = 1;
 
   @ApiPropertyOptional({ example: 12, default: 12 })
   @IsInt()
   @Min(1)
   @IsOptional()
   @Type(() => Number)
-  limit?: number = 12;
+  limit: number = 12;
 }
