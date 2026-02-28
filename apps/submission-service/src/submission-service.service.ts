@@ -36,6 +36,59 @@ function rawToBand(raw: number, map: Record<number, number>): number {
     return 1.0;
 }
 
+/**
+ * Evaluates whether the user's answer matches the correct answer rule.
+ * Features:
+ * - `[OR]`: splits the answer rule into alternate valid answers.
+ * - `(...)`: treats the enclosed text as optional (e.g., "(FREDERICK) FLEET").
+ * - Handles extraneous whitespaces and optionally case sensitivity.
+ * - Handles alternative characters like slashes (e.g. A.M./AM).
+ */
+function evaluateAnswer(userAnswer: string, correctAnswerRule: string, caseSensitive: boolean): boolean {
+    const rules = correctAnswerRule.split(/\[OR\]/i).map((r) => r.trim());
+
+    for (const rule of rules) {
+        // Prepare the rule for regex conversion
+        // 1. Handle slashes as alternatives (e.g., A.M./AM -> (A\.M\.|AM))
+        // Note: This is a basic implementation. For complex cases with slashes,
+        // it's better to use [OR] in the rule itself.
+        let processedRule = rule;
+
+        // Convert the rule into a robust regex
+        let regexPattern = processedRule
+            // Escape special regex characters except parentheses and slashes
+            .replace(/[-[\]{}*+?.,\\^$|#]/g, '\\$&')
+            // Replace slashes with regex OR
+            .replace(/\//g, '|')
+            // Replace \( ... \) with an optional non-capturing group.
+            // We append a ? to make it optional.
+            .replace(/\((.*?)\)/g, '(?:$1)?');
+
+        // Allow flexible whitespace matching (any run of spaces matches any whitespace)
+        // Also collapse multiple spaces
+        regexPattern = regexPattern.replace(/\s+/g, '\\s*');
+        // Ensure exact string match from start to end (allowing surrounding whitespace)
+        regexPattern = `^\\s*${regexPattern}\\s*$`;
+
+        try {
+            const regex = new RegExp(regexPattern, caseSensitive ? '' : 'i');
+            if (regex.test(userAnswer)) {
+                return true;
+            }
+        } catch (e) {
+            // Fallback to basic string comparison if regex parsing fails
+            const ruleText = rule.replace(/[()]/g, '');
+            const compareUser = caseSensitive ? userAnswer.trim() : userAnswer.trim().toLowerCase();
+            const compareRule = caseSensitive ? ruleText : ruleText.toLowerCase();
+            if (compareUser === compareRule) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 @Injectable()
 export class SubmissionServiceService {
     constructor(
@@ -117,12 +170,8 @@ export class SubmissionServiceService {
                 if (!correctData || !qa.answer) {
                     qa.isCorrect = false;
                 } else {
-                    const userAnswer = correctData.case_sensitive
-                        ? qa.answer.trim()
-                        : qa.answer.trim().toLowerCase();
                     const correct = correctData.correct_answers.some((ca) => {
-                        const correct = correctData.case_sensitive ? ca : ca.toLowerCase();
-                        return correct === userAnswer;
+                        return evaluateAnswer(qa.answer!, ca, correctData.case_sensitive);
                     });
                     qa.isCorrect = correct;
                     if (correct) rawScore++;
