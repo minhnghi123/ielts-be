@@ -30,6 +30,7 @@ import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
 import { QueryTestsDto } from './dto/query-tests.dto';
 import { CreateManualTestDto } from './dto/create-manual-test.dto';
+import { SubmitTestAttemptDto } from './dto/submit-test.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -276,5 +277,35 @@ export class TestServiceController {
     @Body() dto: CreateSpeakingPartDto,
   ) {
     return this.testService.createSpeakingPart(testId, dto);
+  }
+
+  // ─── Test Attempts ────────────────────────────────────────────────────────────
+
+  @Post('tests/:testId/attempts')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Start a new attempt for a test' })
+  startAttempt(
+    @Param('testId', ParseUUIDPipe) testId: string,
+    @Body('learnerId', ParseUUIDPipe) learnerId: string,
+  ) {
+    return this.testService.startAttempt(testId, learnerId);
+  }
+
+  @Post('attempts/:attemptId/submit')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Submit answers and complete an attempt' })
+  submitAttempt(
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+    @Body() dto: SubmitTestAttemptDto,
+  ) {
+    return this.testService.submitAttempt(attemptId, dto);
+  }
+
+  @Get('attempts/:attemptId')
+  @ApiOperation({ summary: 'Get an attempt by ID' })
+  @ApiResponse({ status: 200, description: 'Attempt details' })
+  @ApiResponse({ status: 404, description: 'Attempt not found' })
+  getAttemptById(@Param('attemptId', ParseUUIDPipe) attemptId: string) {
+    return this.testService.getAttemptById(attemptId);
   }
 }

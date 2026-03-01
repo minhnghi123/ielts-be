@@ -59,4 +59,11 @@ export class TestProxyController {
         const path = req.url.replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
+
+    @All(['attempts', 'attempts/*'])
+    @ApiOperation({ summary: 'Proxy attempt routes → test-service :5002' })
+    async proxyAttempts(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const path = req.url.replace(/^\/api/, '');
+        await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
+    }
 }

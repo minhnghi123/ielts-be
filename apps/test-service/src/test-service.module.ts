@@ -13,6 +13,8 @@ import { QuestionAnswer } from './entities/question-answer.entity';
 import { WritingTask } from './entities/writing-task.entity';
 import { SpeakingPart } from './entities/speaking-part.entity';
 import { QuestionGroup } from './entities/question-group.entity';
+import { TestAttempt } from './entities/test-attempt.entity';
+import { QuestionAttempt } from './entities/question-attempt.entity';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { QuestionGroup } from './entities/question-group.entity';
         QuestionAnswer,
         WritingTask,
         SpeakingPart,
+        TestAttempt,
+        QuestionAttempt,
       ],
       synchronize: false,
     }),
@@ -46,6 +50,8 @@ import { QuestionGroup } from './entities/question-group.entity';
       QuestionAnswer,
       WritingTask,
       SpeakingPart,
+      TestAttempt,
+      QuestionAttempt,
     ]),
     MulterModule.register({ limits: { fileSize: 50 * 1024 * 1024 } }),
   ],

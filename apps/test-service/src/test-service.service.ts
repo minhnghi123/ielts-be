@@ -12,6 +12,9 @@ import { Question } from './entities/question.entity';
 import { QuestionAnswer } from './entities/question-answer.entity';
 import { WritingTask } from './entities/writing-task.entity';
 import { SpeakingPart } from './entities/speaking-part.entity';
+import { TestAttempt } from './entities/test-attempt.entity';
+import { QuestionAttempt } from './entities/question-attempt.entity';
+import { SubmitTestAttemptDto } from './dto/submit-test.dto';
 import { CreateTestDto } from './dto/create-test.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
@@ -37,6 +40,10 @@ export class TestServiceService {
         private readonly writingTaskRepo: Repository<WritingTask>,
         @InjectRepository(SpeakingPart)
         private readonly speakingPartRepo: Repository<SpeakingPart>,
+        @InjectRepository(TestAttempt)
+        private readonly attemptRepo: Repository<TestAttempt>,
+        @InjectRepository(QuestionAttempt)
+        private readonly questionAttemptRepo: Repository<QuestionAttempt>,
         private readonly dataSource: DataSource,
     ) { }
 
@@ -363,5 +370,119 @@ export class TestServiceService {
         await this.getTestById(testId);
         const part = this.speakingPartRepo.create({ ...dto, testId });
         return this.speakingPartRepo.save(part);
+    }
+
+    // ─── Test Attempts (Joining & Submitting) ──────────────────────────────────
+
+    async startAttempt(testId: string, learnerId: string): Promise<TestAttempt> {
+        const test = await this.getTestById(testId);
+        const attempt = this.attemptRepo.create({
+            testId: test.id,
+            learnerId,
+        });
+        return this.attemptRepo.save(attempt);
+    }
+
+    async getAttemptById(attemptId: string): Promise<TestAttempt> {
+        const attempt = await this.attemptRepo.findOne({
+            where: { id: attemptId },
+            relations: ['questionAttempts', 'test'],
+        });
+        if (!attempt) throw new NotFoundException(`TestAttempt #${attemptId} not found`);
+        return attempt;
+    }
+
+    async submitAttempt(attemptId: string, dto: SubmitTestAttemptDto): Promise<TestAttempt> {
+        const attempt = await this.getAttemptById(attemptId);
+        if (attempt.submittedAt) {
+            throw new BadRequestException('This attempt has already been submitted');
+        }
+
+        const isAutoGraded = ['reading', 'listening'].includes(attempt.test.skill);
+        let rawScore = 0;
+        let bandScore: number | null = null;
+
+        const questionAttempts: QuestionAttempt[] = [];
+
+        for (const answerDto of dto.answers) {
+            let isCorrect: boolean | null = null;
+
+            if (isAutoGraded) {
+                const questionAnswer = await this.answerRepo.findOne({
+                    where: { questionId: answerDto.questionId }
+                });
+
+                if (questionAnswer && answerDto.answer) {
+                    const providedAnswer = questionAnswer.caseSensitive
+                        ? answerDto.answer.trim()
+                        : answerDto.answer.trim().toLowerCase();
+
+                    // Ensure correctAnswers is parsed correctly if it's stored as JSON
+                    let correctAnswersList: any[] = [];
+                    if (Array.isArray(questionAnswer.correctAnswers)) {
+                        correctAnswersList = questionAnswer.correctAnswers;
+                    } else if (typeof questionAnswer.correctAnswers === 'string') {
+                        try {
+                            correctAnswersList = JSON.parse(questionAnswer.correctAnswers);
+                        } catch (e) {
+                            correctAnswersList = [questionAnswer.correctAnswers];
+                        }
+                    }
+
+                    isCorrect = correctAnswersList.some(ca => {
+                        const caStr = typeof ca === 'object' && ca !== null && ca.value ? String(ca.value) : String(ca);
+                        const acceptable = questionAnswer.caseSensitive ? caStr.trim() : caStr.trim().toLowerCase();
+                        return acceptable === providedAnswer;
+                    });
+
+                    if (isCorrect) rawScore++;
+                } else if (questionAnswer && !answerDto.answer) {
+                    isCorrect = false;
+                }
+            }
+
+            const attemptData: Partial<QuestionAttempt> = {
+                testAttemptId: attemptId,
+                questionId: answerDto.questionId,
+                answer: answerDto.answer,
+                answeredAt: new Date(),
+            };
+            if (isCorrect !== null) attemptData.isCorrect = isCorrect;
+
+            const newAttempt = this.questionAttemptRepo.create(attemptData as unknown as Partial<QuestionAttempt>);
+            questionAttempts.push(newAttempt);
+        }
+
+        await this.questionAttemptRepo.save(questionAttempts);
+
+        if (isAutoGraded) {
+            bandScore = this.calculateReadingListeningBand(rawScore);
+        }
+
+        attempt.submittedAt = new Date();
+        attempt.rawScore = rawScore;
+        if (bandScore !== null) {
+            attempt.bandScore = bandScore;
+        }
+
+        return this.attemptRepo.save(attempt);
+    }
+
+    private calculateReadingListeningBand(rawScore: number): number {
+        // Simple mapping representing general IELTS bands out of 40 questions.
+        if (rawScore >= 39) return 9.0;
+        if (rawScore >= 37) return 8.5;
+        if (rawScore >= 35) return 8.0;
+        if (rawScore >= 32) return 7.5;
+        if (rawScore >= 30) return 7.0;
+        if (rawScore >= 26) return 6.5;
+        if (rawScore >= 23) return 6.0;
+        if (rawScore >= 18) return 5.5;
+        if (rawScore >= 16) return 5.0;
+        if (rawScore >= 13) return 4.5;
+        if (rawScore >= 10) return 4.0;
+        if (rawScore >= 6) return 3.5;
+        if (rawScore >= 4) return 3.0;
+        return 0.0;
     }
 }
