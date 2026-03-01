@@ -6,6 +6,7 @@ import {
   UseGuards,
   Request,
   Query,
+  Put,
 } from '@nestjs/common';
 import { AuthServiceService } from './auth-service.service';
 import { RegisterLearnerDto } from './dto/register.dto';
@@ -51,6 +52,14 @@ export class AuthServiceController {
     return this.authService.login(loginDto);
   }
 
+  @Post('google')
+  @ApiOperation({ summary: 'Login using Google OAuth access token' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in via Google' })
+  @ApiResponse({ status: 401, description: 'Invalid token' })
+  async googleLogin(@Body('access_token') accessToken: string) {
+    return this.authService.googleLogin(accessToken);
+  }
+
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -65,6 +74,19 @@ export class AuthServiceController {
   })
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user.sub);
+  }
+
+  @Put('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current user profile (Name and Avatar)' })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateProfile(
+    @Request() req,
+    @Body() updateDto: { fullName?: string; avatarUrl?: string },
+  ) {
+    return this.authService.updateProfile(req.user.sub, updateDto);
   }
 
   @Get('users')

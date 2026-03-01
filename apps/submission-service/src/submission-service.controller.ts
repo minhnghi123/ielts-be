@@ -65,6 +65,18 @@ export class SubmissionServiceController {
         return this.service.getAttemptsByLearner(learnerId);
     }
 
+    @Get('stats/global')
+    @ApiOperation({ summary: 'Get global attempt statistics like average score' })
+    getGlobalStats() {
+        return this.service.getGlobalStats();
+    }
+
+    @Get('stats/recent-activity')
+    @ApiOperation({ summary: 'Get recent global test attempt activity' })
+    getRecentActivity() {
+        return this.service.getRecentActivity();
+    }
+
     // ─── Writing Submissions ──────────────────────────────────────────────────────
 
     @Post('writing-submissions')

@@ -17,11 +17,17 @@ export class Account {
   @Column({ unique: true })
   email: string;
 
-  @Column()
-  password: string; // Lưu hash, không lưu plain text
+  @Column({ nullable: true })
+  password: string; // Lưu hash, không lưu plain text cho tài khoản cục bộ
 
   @Column({ default: 'active' })
   status: string;
+
+  @Column({ name: 'full_name', nullable: true })
+  fullName: string;
+
+  @Column({ name: 'avatar_url', nullable: true })
+  avatarUrl: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

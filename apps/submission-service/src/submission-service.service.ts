@@ -212,6 +212,28 @@ export class SubmissionServiceService {
         });
     }
 
+    async getGlobalStats() {
+        const result = await this.dataSource.query(`
+            SELECT AVG(band_score) as avg_score
+            FROM test_attempts
+            WHERE band_score IS NOT NULL
+        `);
+        return { averageScore: result[0]?.avg_score ? Number(result[0].avg_score).toFixed(1) : "0.0" };
+    }
+
+    async getRecentActivity() {
+        return await this.dataSource.query(`
+            SELECT ta.id as "attemptId", ta.started_at as "startedAt", ta.submitted_at as "submittedAt", ta.band_score as "bandScore", ta.test_id as "testId",
+                   a.email, t.skill, t.title as "testTitle"
+            FROM test_attempts ta
+            JOIN learner_profiles lp ON ta.learner_id = lp.id
+            JOIN accounts a ON lp.account_id = a.id
+            JOIN tests t ON ta.test_id = t.id
+            ORDER BY ta.started_at DESC
+            LIMIT 5
+        `);
+    }
+
     // ─── Writing Submissions ──────────────────────────────────────────────────────
 
     async createWritingSubmission(

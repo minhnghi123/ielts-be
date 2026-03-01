@@ -28,6 +28,14 @@ export class SubmissionProxyController {
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
+    @All('stats')
+    @All('stats/*')
+    @ApiOperation({ summary: 'Proxy stats routes → submission-service :5003' })
+    async proxyStats(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const path = req.url.replace(/^\/api/, '');
+        await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
+    }
+
     @All('writing-submissions')
     @All('writing-submissions/*')
     @ApiOperation({ summary: 'Proxy writing submission routes → submission-service :5003' })

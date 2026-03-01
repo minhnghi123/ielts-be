@@ -12,16 +12,100 @@ import { Account } from './entities/account.entity';
 import { LearnerProfile } from './entities/learner-profile.entity';
 import { RegisterLearnerDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class AuthServiceService {
+  private supabase;
+
   constructor(
     @InjectRepository(Account)
     private readonly accountRepository: Repository<Account>,
     @InjectRepository(LearnerProfile)
     private readonly learnerProfileRepository: Repository<LearnerProfile>,
     private readonly jwtService: JwtService,
-  ) { }
+  ) {
+    this.supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_KEY || ''
+    );
+  }
+
+  async googleLogin(accessToken: string) {
+    // 1. Verify token with Supabase
+    const { data: { user }, error } = await this.supabase.auth.getUser(accessToken);
+
+    if (error || !user) {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const email = user.email;
+    const fullName = user.user_metadata?.full_name;
+    const avatarUrl = user.user_metadata?.avatar_url;
+
+    // 2. Check if account exists
+    let account = await this.accountRepository.findOne({
+      where: { email },
+      relations: ['learnerProfile', 'adminProfile'],
+    });
+
+    if (!account) {
+      // 3. Create new user if they don't exist
+      const newAccount = this.accountRepository.create({
+        email,
+        fullName,
+        avatarUrl,
+        status: 'active',
+        // Note: password is nullable now
+      });
+
+      account = await this.accountRepository.save(newAccount);
+
+      // Create learner profile
+      const learnerProfile = this.learnerProfileRepository.create({
+        accountId: account.id,
+        currentLevel: 'beginner',
+      });
+      account.learnerProfile = await this.learnerProfileRepository.save(learnerProfile);
+    } else {
+      // Optional: Update name/avatar if they are missing
+      let updated = false;
+      if (!account.fullName && fullName) { account.fullName = fullName; updated = true; }
+      if (!account.avatarUrl && avatarUrl) { account.avatarUrl = avatarUrl; updated = true; }
+      if (updated) {
+        await this.accountRepository.save(account);
+      }
+    }
+
+    if (account.status !== 'active') {
+      throw new UnauthorizedException('Account is not active');
+    }
+
+    const role = account.learnerProfile ? 'learner' : 'admin';
+    const profileId = account.learnerProfile?.id || account.adminProfile?.id;
+
+    // 4. Generate system JWT
+    const payload = {
+      sub: account.id,
+      email: account.email,
+      role,
+      profileId,
+    };
+
+    const sysToken = this.jwtService.sign(payload);
+
+    return {
+      accessToken: sysToken,
+      user: {
+        id: account.id,
+        email: account.email,
+        fullName: account.fullName,
+        avatarUrl: account.avatarUrl,
+        role,
+        profileId,
+      },
+    };
+  }
 
   async registerLearner(registerDto: RegisterLearnerDto) {
     const { email, password, confirmPassword } = registerDto;
@@ -81,6 +165,10 @@ export class AuthServiceService {
       throw new UnauthorizedException('Account not found');
     }
 
+    if (!account.password) {
+      throw new UnauthorizedException('This account was created via Google Sign-In. Please sign in with Google.');
+    }
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, account.password);
 
@@ -112,6 +200,8 @@ export class AuthServiceService {
       user: {
         id: account.id,
         email: account.email,
+        fullName: account.fullName,
+        avatarUrl: account.avatarUrl,
         role,
         profileId,
       },
@@ -134,6 +224,8 @@ export class AuthServiceService {
     return {
       id: account.id,
       email: account.email,
+      fullName: account.fullName,
+      avatarUrl: account.avatarUrl,
       role,
       profileId,
       status: account.status,
@@ -166,6 +258,8 @@ export class AuthServiceService {
       return {
         id: account.id,
         email: account.email,
+        fullName: account.fullName,
+        avatarUrl: account.avatarUrl,
         status: account.status,
         role,
         level,
@@ -180,5 +274,27 @@ export class AuthServiceService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async updateProfile(userId: string, updateData: { fullName?: string; avatarUrl?: string }) {
+    const account = await this.accountRepository.findOne({
+      where: { id: userId },
+      relations: ['learnerProfile', 'adminProfile'],
+    });
+
+    if (!account) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (updateData.fullName !== undefined) {
+      account.fullName = updateData.fullName;
+    }
+    if (updateData.avatarUrl !== undefined) {
+      account.avatarUrl = updateData.avatarUrl;
+    }
+
+    await this.accountRepository.save(account);
+
+    return this.validateUser(userId);
   }
 }
