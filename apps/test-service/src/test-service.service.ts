@@ -72,22 +72,31 @@ export class TestServiceService {
     }
 
     async getTestById(id: string) {
-        const test = await this.testRepo.findOne({
-            where: { id },
-            relations: [
+        // Step 1: fetch the test's skill first (lightweight)
+        const meta = await this.testRepo.findOne({ where: { id }, select: ['id', 'skill'] });
+        if (!meta) throw new NotFoundException(`Test #${id} not found`);
+
+        // Step 2: load only the relations relevant to this skill
+        const relations: string[] = [];
+        const order: Record<string, any> = {};
+
+        if (meta.skill === 'reading' || meta.skill === 'listening') {
+            relations.push(
                 'sections',
                 'sections.questionGroups',
                 'sections.questionGroups.questions',
                 'sections.questionGroups.questions.answer',
-                'writingTasks',
-                'speakingParts',
-            ],
-            order: {
-                sections: { sectionOrder: 'ASC' },
-                writingTasks: { taskNumber: 'ASC' },
-                speakingParts: { partNumber: 'ASC' },
-            },
-        });
+            );
+            order['sections'] = { sectionOrder: 'ASC' };
+        } else if (meta.skill === 'writing') {
+            relations.push('writingTasks');
+            order['writingTasks'] = { taskNumber: 'ASC' };
+        } else if (meta.skill === 'speaking') {
+            relations.push('speakingParts');
+            order['speakingParts'] = { partNumber: 'ASC' };
+        }
+
+        const test = await this.testRepo.findOne({ where: { id }, relations, order });
         if (!test) throw new NotFoundException(`Test #${id} not found`);
         return test;
     }
