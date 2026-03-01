@@ -17,6 +17,7 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
 import { SubmitTestAttemptDto } from './dto/submit-test.dto';
 import { CreateTestDto } from './dto/create-test.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
+import { CreateGroupDto } from './dto/create-group.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
@@ -264,6 +265,33 @@ export class TestServiceService {
         if (!section)
             throw new NotFoundException(`Section #${sectionId} not found`);
         await this.sectionRepo.remove(section);
+    }
+
+    // ─── Question Groups ──────────────────────────────────────────────────────────
+
+    async createGroup(sectionId: string, dto: CreateGroupDto): Promise<QuestionGroup> {
+        const section = await this.sectionRepo.findOne({ where: { id: sectionId } });
+        if (!section) throw new NotFoundException(`Section #${sectionId} not found`);
+        const group = this.questionGroupRepo.create({
+            sectionId,
+            groupOrder: dto.groupOrder,
+            instructions: dto.instructions,
+        });
+        return this.questionGroupRepo.save(group);
+    }
+
+    async updateGroup(groupId: string, dto: Partial<CreateGroupDto>): Promise<QuestionGroup> {
+        const group = await this.questionGroupRepo.findOne({ where: { id: groupId } });
+        if (!group) throw new NotFoundException(`QuestionGroup #${groupId} not found`);
+        if (dto.groupOrder !== undefined) group.groupOrder = dto.groupOrder;
+        if (dto.instructions !== undefined) group.instructions = dto.instructions;
+        return this.questionGroupRepo.save(group);
+    }
+
+    async deleteGroup(groupId: string): Promise<void> {
+        const group = await this.questionGroupRepo.findOne({ where: { id: groupId } });
+        if (!group) throw new NotFoundException(`QuestionGroup #${groupId} not found`);
+        await this.questionGroupRepo.remove(group);
     }
 
     // ─── Questions ────────────────────────────────────────────────────────────────

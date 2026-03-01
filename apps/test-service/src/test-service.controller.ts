@@ -25,6 +25,7 @@ import { TestServiceService } from './test-service.service';
 import { ImportTestService } from './import/import-test.service';
 import { CreateTestDto } from './dto/create-test.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
+import { CreateGroupDto } from './dto/create-group.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
@@ -205,6 +206,36 @@ export class TestServiceController {
   @ApiOperation({ summary: 'Delete a section' })
   deleteSection(@Param('sectionId', ParseUUIDPipe) sectionId: string) {
     return this.testService.deleteSection(sectionId);
+  }
+
+  // ─── Question Groups ──────────────────────────────────────────────────────────
+
+  @Post('sections/:sectionId/groups')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Add a question group to a section' })
+  createGroup(
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @Body() dto: CreateGroupDto,
+  ) {
+    return this.testService.createGroup(sectionId, dto);
+  }
+
+  @Put('groups/:groupId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a question group' })
+  updateGroup(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: Partial<CreateGroupDto>,
+  ) {
+    return this.testService.updateGroup(groupId, dto);
+  }
+
+  @Delete('groups/:groupId')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a question group' })
+  deleteGroup(@Param('groupId', ParseUUIDPipe) groupId: string) {
+    return this.testService.deleteGroup(groupId);
   }
 
   // ─── Questions ────────────────────────────────────────────────────────────────
