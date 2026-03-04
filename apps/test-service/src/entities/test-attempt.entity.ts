@@ -26,10 +26,10 @@ export class TestAttempt {
     @Column({ name: 'test_id', type: 'uuid' })
     testId: string;
 
-    @CreateDateColumn({ name: 'started_at' })
+    @CreateDateColumn({ name: 'started_at', type: 'timestamptz' })
     startedAt: Date;
 
-    @Column({ name: 'submitted_at', type: 'timestamp', nullable: true })
+    @Column({ name: 'submitted_at', type: 'timestamptz', nullable: true })
     submittedAt: Date;
 
     @Column({ name: 'raw_score', type: 'int', nullable: true })

@@ -423,16 +423,53 @@ export class TestServiceService {
     async getAttemptById(attemptId: string): Promise<TestAttempt> {
         const attempt = await this.attemptRepo.findOne({
             where: { id: attemptId },
-            relations: ['questionAttempts', 'test'],
+            relations: [
+                'questionAttempts',
+                'questionAttempts.question',
+                'questionAttempts.question.answer',
+                'test',
+            ],
         });
         if (!attempt) throw new NotFoundException(`TestAttempt #${attemptId} not found`);
         return attempt;
+    }
+
+    async getAttemptsByLearnerId(learnerId: string): Promise<TestAttempt[]> {
+        return this.attemptRepo.find({
+            where: { learnerId },
+            relations: ['test'],
+            order: { startedAt: 'DESC' },
+        });
+    }
+
+    /** Normalise a raw correctAnswers value into a comparable string array */
+    private parseCorrectAnswersList(raw: any, caseSensitive: boolean): string[] {
+        let list: string[] = [];
+        if (Array.isArray(raw)) {
+            list = raw.map(ca =>
+                typeof ca === 'object' && ca !== null && ca.value !== undefined
+                    ? String(ca.value)
+                    : String(ca),
+            );
+        } else if (typeof raw === 'string') {
+            try {
+                const parsed = JSON.parse(raw);
+                list = Array.isArray(parsed) ? parsed.map(String) : [raw];
+            } catch {
+                list = [raw];
+            }
+        }
+        return caseSensitive ? list.map(s => s.trim()) : list.map(s => s.trim().toLowerCase());
     }
 
     async submitAttempt(attemptId: string, dto: SubmitTestAttemptDto): Promise<TestAttempt> {
         const attempt = await this.getAttemptById(attemptId);
         if (attempt.submittedAt) {
             throw new BadRequestException('This attempt has already been submitted');
+        }
+
+        if (!attempt.test) {
+            throw new NotFoundException(`Test for attempt #${attemptId} not found`);
         }
 
         const isAutoGraded = ['reading', 'listening'].includes(attempt.test.skill);
@@ -442,71 +479,76 @@ export class TestServiceService {
         const questionAttempts: QuestionAttempt[] = [];
 
         for (const answerDto of dto.answers) {
+            // Default: null means "not graded / not applicable"
             let isCorrect: boolean | null = null;
 
             if (isAutoGraded) {
-                const questionAnswer = await this.answerRepo.findOne({
-                    where: { questionId: answerDto.questionId }
-                });
+                const trimmedAnswer = answerDto.answer?.trim() ?? '';
 
-                if (questionAnswer && answerDto.answer) {
-                    const providedAnswer = questionAnswer.caseSensitive
-                        ? answerDto.answer.trim()
-                        : answerDto.answer.trim().toLowerCase();
-
-                    // Ensure correctAnswers is parsed correctly if it's stored as JSON
-                    let correctAnswersList: any[] = [];
-                    if (Array.isArray(questionAnswer.correctAnswers)) {
-                        correctAnswersList = questionAnswer.correctAnswers;
-                    } else if (typeof questionAnswer.correctAnswers === 'string') {
-                        try {
-                            correctAnswersList = JSON.parse(questionAnswer.correctAnswers);
-                        } catch (e) {
-                            correctAnswersList = [questionAnswer.correctAnswers];
-                        }
-                    }
-
-                    isCorrect = correctAnswersList.some(ca => {
-                        const caStr = typeof ca === 'object' && ca !== null && ca.value ? String(ca.value) : String(ca);
-                        const acceptable = questionAnswer.caseSensitive ? caStr.trim() : caStr.trim().toLowerCase();
-                        return acceptable === providedAnswer;
+                if (!trimmedAnswer) {
+                    // Skipped — no answer provided, counts as wrong for scoring
+                    isCorrect = false;
+                } else {
+                    const questionAnswer = await this.answerRepo.findOne({
+                        where: { questionId: answerDto.questionId },
                     });
 
-                    if (isCorrect) rawScore++;
-                } else if (questionAnswer && !answerDto.answer) {
-                    isCorrect = false;
+                    if (!questionAnswer) {
+                        // No answer record in DB — treat as wrong (conservative)
+                        isCorrect = false;
+                    } else {
+                        const provided = questionAnswer.caseSensitive
+                            ? trimmedAnswer
+                            : trimmedAnswer.toLowerCase();
+
+                        const acceptableAnswers = this.parseCorrectAnswersList(
+                            questionAnswer.correctAnswers,
+                            questionAnswer.caseSensitive,
+                        );
+
+                        isCorrect = acceptableAnswers.includes(provided);
+                        if (isCorrect) rawScore++;
+                    }
                 }
             }
 
             const attemptData: Partial<QuestionAttempt> = {
                 testAttemptId: attemptId,
                 questionId: answerDto.questionId,
-                answer: answerDto.answer,
+                answer: answerDto.answer ?? '',
                 answeredAt: new Date(),
+                isCorrect,
             };
-            if (isCorrect !== null) attemptData.isCorrect = isCorrect;
 
             const newAttempt = this.questionAttemptRepo.create(attemptData as unknown as Partial<QuestionAttempt>);
             questionAttempts.push(newAttempt);
         }
 
-        await this.questionAttemptRepo.save(questionAttempts);
+        if (questionAttempts.length > 0) {
+            await this.questionAttemptRepo.save(questionAttempts);
+        }
 
         if (isAutoGraded) {
-            bandScore = this.calculateReadingListeningBand(rawScore);
+            bandScore = attempt.test.skill === 'listening'
+                ? this.calculateListeningBand(rawScore)
+                : this.calculateReadingBand(rawScore);
         }
 
-        attempt.submittedAt = new Date();
-        attempt.rawScore = rawScore;
+        // Use update() instead of save() to avoid TypeORM cascade wiping questionAttempts
+        const updatePayload: Partial<TestAttempt> = {
+            submittedAt: new Date(),
+            rawScore,
+        };
         if (bandScore !== null) {
-            attempt.bandScore = bandScore;
+            updatePayload.bandScore = bandScore;
         }
+        await this.attemptRepo.update(attempt.id, updatePayload);
 
-        return this.attemptRepo.save(attempt);
+        return this.getAttemptById(attempt.id);
     }
 
-    private calculateReadingListeningBand(rawScore: number): number {
-        // Simple mapping representing general IELTS bands out of 40 questions.
+    /** Official IELTS Listening band conversion table */
+    private calculateListeningBand(rawScore: number): number {
         if (rawScore >= 39) return 9.0;
         if (rawScore >= 37) return 8.5;
         if (rawScore >= 35) return 8.0;
@@ -517,9 +559,26 @@ export class TestServiceService {
         if (rawScore >= 18) return 5.5;
         if (rawScore >= 16) return 5.0;
         if (rawScore >= 13) return 4.5;
+        if (rawScore >= 11) return 4.0;
+        return 3.5;
+    }
+
+    /** Official IELTS Academic Reading band conversion table */
+    private calculateReadingBand(rawScore: number): number {
+        if (rawScore >= 39) return 9.0;
+        if (rawScore >= 37) return 8.5;
+        if (rawScore >= 35) return 8.0;
+        if (rawScore >= 33) return 7.5;
+        if (rawScore >= 30) return 7.0;
+        if (rawScore >= 27) return 6.5;
+        if (rawScore >= 23) return 6.0;
+        if (rawScore >= 19) return 5.5;
+        if (rawScore >= 15) return 5.0;
+        if (rawScore >= 13) return 4.5;
         if (rawScore >= 10) return 4.0;
-        if (rawScore >= 6) return 3.5;
-        if (rawScore >= 4) return 3.0;
-        return 0.0;
+        if (rawScore >= 8)  return 3.5;
+        if (rawScore >= 6)  return 3.0;
+        if (rawScore >= 4)  return 2.5;
+        return 2.0;
     }
 }

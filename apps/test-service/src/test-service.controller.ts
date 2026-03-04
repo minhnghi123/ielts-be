@@ -333,10 +333,16 @@ export class TestServiceController {
   }
 
   @Get('attempts/:attemptId')
-  @ApiOperation({ summary: 'Get an attempt by ID' })
+  @ApiOperation({ summary: 'Get an attempt by ID (with question details & correct answers)' })
   @ApiResponse({ status: 200, description: 'Attempt details' })
   @ApiResponse({ status: 404, description: 'Attempt not found' })
   getAttemptById(@Param('attemptId', ParseUUIDPipe) attemptId: string) {
     return this.testService.getAttemptById(attemptId);
+  }
+
+  @Get('attempts')
+  @ApiOperation({ summary: 'Get all attempts for a learner' })
+  getAttemptsByLearnerId(@Query('learnerId') learnerId: string) {
+    return this.testService.getAttemptsByLearnerId(learnerId);
   }
 }
