@@ -353,9 +353,19 @@ export class TestServiceService {
 
         await this.questionRepo.save(question);
 
-        if (dto.answer && question.answer) {
-            Object.assign(question.answer, dto.answer);
-            await this.answerRepo.save(question.answer);
+        if (dto.answer) {
+            if (question.answer) {
+                Object.assign(question.answer, dto.answer);
+                await this.answerRepo.save(question.answer);
+            } else {
+                // No answer record existed (e.g. old question saved without one) — create it now
+                const newAnswer = this.answerRepo.create({
+                    questionId: question.id,
+                    correctAnswers: dto.answer.correctAnswers,
+                    caseSensitive: dto.answer.caseSensitive ?? false,
+                });
+                await this.answerRepo.save(newAnswer);
+            }
         }
 
         return this.questionRepo.findOne({
@@ -442,24 +452,153 @@ export class TestServiceService {
         });
     }
 
-    /** Normalise a raw correctAnswers value into a comparable string array */
-    private parseCorrectAnswersList(raw: any, caseSensitive: boolean): string[] {
-        let list: string[] = [];
+    // ─── Answer grading helpers ─────────────────────────────────────────────────
+
+    /**
+     * Extract the raw answer strings stored in the DB.
+     * Handles PostgreSQL text[] (already a JS array), JSON strings, and plain strings.
+     */
+    private extractRawAnswers(raw: any): string[] {
+        if (!raw) return [];
         if (Array.isArray(raw)) {
-            list = raw.map(ca =>
+            return raw.map(ca =>
                 typeof ca === 'object' && ca !== null && ca.value !== undefined
                     ? String(ca.value)
                     : String(ca),
-            );
-        } else if (typeof raw === 'string') {
+            ).filter(Boolean);
+        }
+        if (typeof raw === 'string') {
             try {
                 const parsed = JSON.parse(raw);
-                list = Array.isArray(parsed) ? parsed.map(String) : [raw];
-            } catch {
-                list = [raw];
+                if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+            } catch { /* fall through */ }
+            return [raw];
+        }
+        return [];
+    }
+
+    /**
+     * Expand one IELTS answer template into every acceptable string.
+     *
+     * Rules:
+     *   [OR]   — top-level separator between completely different correct answers
+     *            "MIDNIGHT [OR] 12(.00) A.M./AM"
+     *   (text) — text inside is optional; generate forms with and without it
+     *            "(FREDERICK) FLEET" → "FLEET" | "FREDERICK FLEET"
+     *   a/b    — slash inside a whitespace token means either token value is fine
+     *            "A.M./AM" → "A.M." | "AM"
+     *            "SEVEN (PEOPLE/STUDENTS)" → "SEVEN" | "SEVEN PEOPLE" | "SEVEN STUDENTS"
+     */
+    private expandAnswerTemplate(template: string, caseSensitive: boolean): string[] {
+        const topAlts = template.split(/\[OR\]/i).map(s => s.trim());
+        const results = new Set<string>();
+        for (const alt of topAlts) {
+            this.expandOptionalGroups(alt, caseSensitive).forEach(s => results.add(s));
+        }
+        return Array.from(results).filter(Boolean);
+    }
+
+    /** Expand all (…) optional groups → 2ⁿ combinations → expand slashes in each */
+    private expandOptionalGroups(s: string, caseSensitive: boolean): string[] {
+        const matches = Array.from(s.matchAll(/\(([^)]*)\)/g));
+
+        if (matches.length === 0) {
+            return this.expandSlashAlternatives(s, caseSensitive);
+        }
+
+        const n = matches.length;
+        const combinations = new Set<string>();
+
+        for (let mask = 0; mask < (1 << n); mask++) {
+            let result = s;
+            // Process right-to-left so character positions stay valid
+            for (let i = n - 1; i >= 0; i--) {
+                const match = matches[i];
+                const include = !!(mask & (1 << i));
+                const fullMatch = match[0];           // e.g. "(FREDERICK)"
+                const innerText = match[1] ?? '';     // e.g. "FREDERICK"
+                const start = match.index ?? 0;
+                result =
+                    result.slice(0, start) +
+                    (include ? innerText : '') +
+                    result.slice(start + fullMatch.length);
+            }
+            result = result.replace(/\s+/g, ' ').trim();
+            if (result) combinations.add(result);
+        }
+
+        const all = new Set<string>();
+        for (const combo of combinations) {
+            this.expandSlashAlternatives(combo, caseSensitive).forEach(s => all.add(s));
+        }
+        return Array.from(all).filter(Boolean);
+    }
+
+    /**
+     * Expand slash alternatives within each whitespace-separated token.
+     * "12.00 A.M./AM" → ["12.00 A.M.", "12.00 AM"]
+     */
+    private expandSlashAlternatives(s: string, caseSensitive: boolean): string[] {
+        const tokens = s.split(/\s+/).filter(Boolean);
+        let results: string[] = [''];
+
+        for (const token of tokens) {
+            if (token.includes('/')) {
+                const slashAlts = token.split('/').filter(Boolean);
+                const next: string[] = [];
+                for (const prev of results) {
+                    for (const alt of slashAlts) {
+                        next.push(prev ? `${prev} ${alt}` : alt);
+                    }
+                }
+                results = next;
+            } else {
+                results = results.map(prev => (prev ? `${prev} ${token}` : token));
             }
         }
-        return caseSensitive ? list.map(s => s.trim()) : list.map(s => s.trim().toLowerCase());
+
+        const norm = caseSensitive
+            ? (v: string) => v.trim()
+            : (v: string) => v.trim().toLowerCase();
+
+        return [...new Set(results.map(norm).filter(Boolean))];
+    }
+
+    /**
+     * Build the complete set of acceptable answers for a stored correctAnswers value.
+     * Every stored template is fully expanded according to IELTS answer-key rules.
+     */
+    private buildAcceptableAnswers(rawCorrectAnswers: any, caseSensitive: boolean): Set<string> {
+        const rawList = this.extractRawAnswers(rawCorrectAnswers);
+        const acceptable = new Set<string>();
+        for (const raw of rawList) {
+            this.expandAnswerTemplate(raw, caseSensitive).forEach(a => acceptable.add(a));
+        }
+        return acceptable;
+    }
+
+    /**
+     * Normalise a user-provided answer before comparison.
+     * - Collapses whitespace
+     * - Applies case normalisation
+     * - Maps common True/False/Not-Given abbreviations to canonical forms
+     *   so "NG", "N/G", "not-given" all match the stored "NOT GIVEN"
+     */
+    private normaliseInput(answer: string, caseSensitive: boolean): string {
+        const trimmed = answer.trim().replace(/\s+/g, ' ');
+        const step1 = caseSensitive ? trimmed : trimmed.toLowerCase();
+
+        // TFNG / YNGNG alias map (keys are already lowercase)
+        const tfngAliases: Record<string, string> = {
+            't': 'true',
+            'f': 'false',
+            'ng': 'not given',
+            'n/g': 'not given',
+            'not-given': 'not given',
+            'notgiven': 'not given',
+            'y': 'yes',
+        };
+        return tfngAliases[step1] ?? step1;
     }
 
     async submitAttempt(attemptId: string, dto: SubmitTestAttemptDto): Promise<TestAttempt> {
@@ -497,16 +636,19 @@ export class TestServiceService {
                         // No answer record in DB — treat as wrong (conservative)
                         isCorrect = false;
                     } else {
-                        const provided = questionAnswer.caseSensitive
-                            ? trimmedAnswer
-                            : trimmedAnswer.toLowerCase();
-
-                        const acceptableAnswers = this.parseCorrectAnswersList(
+                        // Expand every stored template into all acceptable forms
+                        const acceptable = this.buildAcceptableAnswers(
                             questionAnswer.correctAnswers,
                             questionAnswer.caseSensitive,
                         );
 
-                        isCorrect = acceptableAnswers.includes(provided);
+                        // Normalise the user's input (incl. TFNG alias resolution)
+                        const normalisedInput = this.normaliseInput(
+                            trimmedAnswer,
+                            questionAnswer.caseSensitive,
+                        );
+
+                        isCorrect = acceptable.has(normalisedInput);
                         if (isCorrect) rawScore++;
                     }
                 }
@@ -517,7 +659,7 @@ export class TestServiceService {
                 questionId: answerDto.questionId,
                 answer: answerDto.answer ?? '',
                 answeredAt: new Date(),
-                isCorrect,
+                isCorrect: isCorrect ?? null,
             };
 
             const newAttempt = this.questionAttemptRepo.create(attemptData as unknown as Partial<QuestionAttempt>);
@@ -576,9 +718,9 @@ export class TestServiceService {
         if (rawScore >= 15) return 5.0;
         if (rawScore >= 13) return 4.5;
         if (rawScore >= 10) return 4.0;
-        if (rawScore >= 8)  return 3.5;
-        if (rawScore >= 6)  return 3.0;
-        if (rawScore >= 4)  return 2.5;
+        if (rawScore >= 8) return 3.5;
+        if (rawScore >= 6) return 3.0;
+        if (rawScore >= 4) return 2.5;
         return 2.0;
     }
 }

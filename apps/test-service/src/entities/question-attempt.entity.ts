@@ -33,7 +33,7 @@ export class QuestionAttempt {
     answer: string;
 
     @Column({ name: 'is_correct', type: 'boolean', nullable: true })
-    isCorrect: boolean;
+    isCorrect: boolean | null;
 
     @Column({ name: 'answered_at', type: 'timestamp', nullable: true })
     answeredAt: Date;
