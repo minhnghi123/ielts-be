@@ -345,4 +345,15 @@ export class TestServiceController {
   getAttemptsByLearnerId(@Query('learnerId') learnerId: string) {
     return this.testService.getAttemptsByLearnerId(learnerId);
   }
+
+  @Put('attempts/:attemptId/ai-feedback')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Save AI-generated feedback for an attempt' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async saveAiFeedback(
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+    @Body('aiFeedback') aiFeedback: string,
+  ) {
+    await this.testService.saveAiFeedback(attemptId, aiFeedback);
+  }
 }

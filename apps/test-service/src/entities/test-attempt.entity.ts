@@ -38,6 +38,10 @@ export class TestAttempt {
     @Column({ name: 'band_score', type: 'decimal', precision: 3, scale: 1, nullable: true })
     bandScore: number;
 
+    /** AI-generated feedback stored after the result page triggers analysis. */
+    @Column({ name: 'ai_feedback', type: 'text', nullable: true })
+    aiFeedback: string | null;
+
     @OneToMany(() => QuestionAttempt, (qa) => qa.testAttempt, { cascade: true })
     questionAttempts: QuestionAttempt[];
 }

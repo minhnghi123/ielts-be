@@ -452,6 +452,11 @@ export class TestServiceService {
         });
     }
 
+    /** Save (or update) the AI-generated feedback text for one attempt. */
+    async saveAiFeedback(attemptId: string, aiFeedback: string): Promise<void> {
+        await this.attemptRepo.update({ id: attemptId }, { aiFeedback });
+    }
+
     // ─── Answer grading helpers ─────────────────────────────────────────────────
 
     /**
