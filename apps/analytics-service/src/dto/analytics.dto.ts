@@ -1,4 +1,4 @@
-import { IsUUID, IsIn, IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { IsUUID, IsIn, IsNumber, IsOptional, Min, Max, IsString, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpsertBandProfileDto {
@@ -49,7 +49,8 @@ export class CreateMistakeDto {
     questionId: string;
 
     @ApiPropertyOptional({ example: 'fill_in_blank' })
-    @IsIn(['multiple_choice', 'fill_in_blank', 'true_false_not_given', 'matching'])
+    @IsString()
+    @MaxLength(50)
     @IsOptional()
     mistakeType?: string;
 }

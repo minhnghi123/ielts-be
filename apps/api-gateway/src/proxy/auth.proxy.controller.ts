@@ -21,7 +21,8 @@ export class AuthProxyController {
     @ApiOperation({ summary: 'Proxy all auth routes → auth-service :5001' })
     async proxy(@Req() req: Request, @Res() res: Response): Promise<void> {
         // Strip the /api/auth prefix and forward remainder
-        const path = req.url.replace(/^\/api\/auth/, '/auth');
+        const sourcePath = req.originalUrl || req.url;
+        const path = sourcePath.replace(/^\/api\/auth/, '/auth');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 }

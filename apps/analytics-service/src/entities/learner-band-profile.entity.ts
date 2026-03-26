@@ -1,11 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { randomUUID } from 'crypto';
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 
 export type Skill = 'reading' | 'listening' | 'writing' | 'speaking' | 'overall';
 
 @Entity('learner_band_profiles')
 export class LearnerBandProfile {
-    @PrimaryGeneratedColumn('uuid')
+    @PrimaryColumn('uuid')
     id: string;
+
+    @BeforeInsert()
+    ensureId() {
+        if (!this.id) this.id = randomUUID();
+    }
 
     @Column({ name: 'learner_id' })
     learnerId: string;

@@ -24,7 +24,7 @@ export class SubmissionProxyController {
     @All('attempts/*')
     @ApiOperation({ summary: 'Proxy attempt routes → submission-service :5003' })
     async proxyAttempts(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = req.url.replace(/^\/api/, '');
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
@@ -32,7 +32,7 @@ export class SubmissionProxyController {
     @All('stats/*')
     @ApiOperation({ summary: 'Proxy stats routes → submission-service :5003' })
     async proxyStats(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = req.url.replace(/^\/api/, '');
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
@@ -40,7 +40,7 @@ export class SubmissionProxyController {
     @All('writing-submissions/*')
     @ApiOperation({ summary: 'Proxy writing submission routes → submission-service :5003' })
     async proxyWriting(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = req.url.replace(/^\/api/, '');
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
@@ -48,7 +48,7 @@ export class SubmissionProxyController {
     @All('speaking-submissions/*')
     @ApiOperation({ summary: 'Proxy speaking submission routes → submission-service :5003' })
     async proxySpeaking(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = req.url.replace(/^\/api/, '');
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
@@ -56,7 +56,7 @@ export class SubmissionProxyController {
     @All('learners/*')
     @ApiOperation({ summary: 'Proxy learner routes → submission-service :5003' })
     async proxyLearners(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = req.url.replace(/^\/api/, '');
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 }

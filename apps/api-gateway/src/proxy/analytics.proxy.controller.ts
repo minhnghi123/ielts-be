@@ -18,10 +18,10 @@ export class AnalyticsProxyController {
     }
 
     @All('analytics')
-    @All('analytics/*')
+    @All(['analytics', 'analytics/*'])
     @ApiOperation({ summary: 'Proxy analytics routes → analytics-service :5004' })
     async proxy(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = req.url.replace(/^\/api/, '');
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 }

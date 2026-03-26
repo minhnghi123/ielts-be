@@ -2,6 +2,7 @@ import {
     Injectable,
     NotFoundException,
     BadRequestException,
+    Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, DataSource } from 'typeorm';
@@ -26,6 +27,8 @@ import { CreateManualTestDto } from './dto/create-manual-test.dto';
 
 @Injectable()
 export class TestServiceService {
+    private readonly logger = new Logger(TestServiceService.name);
+
     constructor(
         @InjectRepository(Test)
         private readonly testRepo: Repository<Test>,
@@ -619,6 +622,7 @@ export class TestServiceService {
         const isAutoGraded = ['reading', 'listening'].includes(attempt.test.skill);
         let rawScore = 0;
         let bandScore: number | null = null;
+        const wrongQuestionIds: string[] = [];
 
         const questionAttempts: QuestionAttempt[] = [];
 
@@ -655,6 +659,7 @@ export class TestServiceService {
 
                         isCorrect = acceptable.has(normalisedInput);
                         if (isCorrect) rawScore++;
+                        if (isCorrect === false) wrongQuestionIds.push(answerDto.questionId);
                     }
                 }
             }
@@ -691,7 +696,86 @@ export class TestServiceService {
         }
         await this.attemptRepo.update(attempt.id, updatePayload);
 
-        return this.getAttemptById(attempt.id);
+        const submittedAttempt = await this.getAttemptById(attempt.id);
+        await this.syncAnalyticsAfterSubmit(submittedAttempt, [...new Set(wrongQuestionIds)]);
+        return submittedAttempt;
+    }
+
+    private async syncAnalyticsAfterSubmit(
+        attempt: TestAttempt,
+        wrongQuestionIds: string[],
+    ): Promise<void> {
+        const band = Number(attempt.bandScore ?? 0);
+        if (!attempt.submittedAt || !band) return;
+
+        const baseUrl = process.env.ANALYTICS_SERVICE_URL || 'http://localhost:5004';
+        const learnerId = attempt.learnerId;
+        const skill = attempt.test?.skill;
+
+        try {
+            const upserts: Promise<Response>[] = [];
+            if (skill) {
+                upserts.push(
+                    fetch(`${baseUrl}/analytics/band-profiles`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            learnerId,
+                            skill,
+                            currentBand: band,
+                        }),
+                    }),
+                );
+            }
+
+            upserts.push(
+                fetch(`${baseUrl}/analytics/band-profiles`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        learnerId,
+                        skill: 'overall',
+                        currentBand: band,
+                    }),
+                }),
+                fetch(`${baseUrl}/analytics/progress/snapshot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        learnerId,
+                        overallBand: band,
+                    }),
+                }),
+            );
+
+            await Promise.all(upserts);
+        } catch (error) {
+            this.logger.warn(
+                `Failed to sync snapshot/band profile for attempt ${attempt.id}: ${String(error)}`,
+            );
+        }
+
+        if (wrongQuestionIds.length === 0) return;
+
+        try {
+            await Promise.all(
+                wrongQuestionIds.map((questionId) =>
+                    fetch(`${baseUrl}/analytics/mistakes`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            learnerId,
+                            questionId,
+                            mistakeType: 'wrong_answer',
+                        }),
+                    }),
+                ),
+            );
+        } catch (error) {
+            this.logger.warn(
+                `Failed to sync mistakes for attempt ${attempt.id}: ${String(error)}`,
+            );
+        }
     }
 
     /** Official IELTS Listening band conversion table */

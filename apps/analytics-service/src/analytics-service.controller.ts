@@ -6,6 +6,8 @@ import {
     Param,
     Body,
     ParseUUIDPipe,
+    HttpCode,
+    HttpStatus,
 } from '@nestjs/common';
 import { AnalyticsServiceService } from './analytics-service.service';
 import {
@@ -61,5 +63,25 @@ export class AnalyticsServiceController {
     @ApiOperation({ summary: 'Record a mistake for a learner on a question' })
     recordMistake(@Body() dto: CreateMistakeDto) {
         return this.service.recordMistake(dto);
+    }
+
+    // ─── Sync endpoints ───────────────────────────────────────────────────────────
+
+    @Post('sync/:learnerId')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Full analytics sync for one learner — rebuilds band profiles, snapshots, and mistakes from source tables',
+    })
+    syncLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+        return this.service.fullSyncLearnerAnalytics(learnerId);
+    }
+
+    @Post('sync-all')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Sync analytics for ALL learners who have submitted attempts (admin)',
+    })
+    syncAll() {
+        return this.service.syncAllLearnersAnalytics();
     }
 }
