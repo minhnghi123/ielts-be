@@ -4,6 +4,8 @@ import { Request, Response } from 'express';
 import { lastValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
 
+type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
+
 @Injectable()
 export class ProxyService {
     private readonly logger = new Logger(ProxyService.name);
@@ -11,12 +13,7 @@ export class ProxyService {
     constructor(private readonly httpService: HttpService) { }
 
     async forward(req: Request, res: Response, targetUrl: string): Promise<void> {
-        const method = req.method.toLowerCase() as
-            | 'get'
-            | 'post'
-            | 'put'
-            | 'patch'
-            | 'delete';
+        const method = req.method.toLowerCase() as HttpMethod;
 
         // Build forwarding headers — pass through auth + content-type
         const headers: Record<string, string> = {};
