@@ -110,12 +110,6 @@ export class AnalyticsServiceService {
 
     // ─── Full sync ────────────────────────────────────────────────────────────────
 
-    /**
-     * Fully rebuilds learner_band_profiles, learner_progress_snapshots, and
-     * learner_mistakes for one learner by reading source-of-truth tables
-     * (test_attempts, question_attempts, tests, writing/speaking submissions).
-     * Safe to call multiple times — wipes and rebuilds each time.
-     */
     async fullSyncLearnerAnalytics(learnerId: string): Promise<{
         bandProfiles: number;
         snapshots: number;
@@ -123,21 +117,10 @@ export class AnalyticsServiceService {
     }> {
         const db = this.dataSource;
 
-        // ── 1. Clear existing analytics rows for this learner ────────────────────
-        await db.query(
-            `DELETE FROM learner_band_profiles  WHERE learner_id = $1`,
-            [learnerId],
-        );
-        await db.query(
-            `DELETE FROM learner_progress_snapshots WHERE learner_id = $1`,
-            [learnerId],
-        );
-        await db.query(
-            `DELETE FROM learner_mistakes WHERE learner_id = $1`,
-            [learnerId],
-        );
+        await db.query(`DELETE FROM learner_band_profiles  WHERE learner_id = $1`, [learnerId]);
+        await db.query(`DELETE FROM learner_progress_snapshots WHERE learner_id = $1`, [learnerId]);
+        await db.query(`DELETE FROM learner_mistakes WHERE learner_id = $1`, [learnerId]);
 
-        // ── 2. Band profiles — avg band per skill + overall ──────────────────────
         const skillRows: Array<{ skill: string; avg_band: string }> = await db.query(
             `
             SELECT t.skill, AVG(ta.band_score)::float AS avg_band
@@ -170,12 +153,7 @@ export class AnalyticsServiceService {
             bandProfilesInserted++;
         }
 
-        // ── 3. Progress snapshots — one per submitted attempt, ordered by date ───
-        //    Each snapshot reflects the running average at submission time.
-        const attemptRows: Array<{
-            submitted_at: Date;
-            band_score: string;
-        }> = await db.query(
+        const attemptRows: Array<{ submitted_at: Date; band_score: string }> = await db.query(
             `
             SELECT ta.submitted_at, ta.band_score
             FROM   test_attempts ta
@@ -204,11 +182,7 @@ export class AnalyticsServiceService {
             snapshotsInserted++;
         }
 
-        // ── 4. Mistakes — every wrong answer across all submitted attempts ────────
-        const wrongRows: Array<{
-            question_id: string;
-            question_type: string;
-        }> = await db.query(
+        const wrongRows: Array<{ question_id: string; question_type: string }> = await db.query(
             `
             SELECT qa.question_id, q.question_type
             FROM   question_attempts qa
@@ -238,17 +212,9 @@ export class AnalyticsServiceService {
             `${bandProfilesInserted} band profiles, ${snapshotsInserted} snapshots, ${mistakesInserted} mistakes`,
         );
 
-        return {
-            bandProfiles: bandProfilesInserted,
-            snapshots: snapshotsInserted,
-            mistakes: mistakesInserted,
-        };
+        return { bandProfiles: bandProfilesInserted, snapshots: snapshotsInserted, mistakes: mistakesInserted };
     }
 
-    /**
-     * Syncs analytics for every learner that has at least one submitted attempt
-     * but is missing at least one analytics row.  Returns per-learner results.
-     */
     async syncAllLearnersAnalytics(): Promise<{
         synced: number;
         results: Array<{ learnerId: string; bandProfiles: number; snapshots: number; mistakes: number }>;
@@ -278,7 +244,6 @@ export class AnalyticsServiceService {
 
     // ─── Dashboard Summary ────────────────────────────────────────────────────────
 
-    /** Lightweight on-demand backfill — only runs if analytics tables are empty for this learner. */
     private async backfillIfEmpty(learnerId: string): Promise<void> {
         const profileCount = await this.bandProfileRepo.count({ where: { learnerId } });
         const snapshotCount = await this.snapshotRepo.count({ where: { learnerId } });
@@ -349,13 +314,7 @@ export class AnalyticsServiceService {
                     : accuracy >= 70 ? 'proficient'
                         : accuracy >= 50 ? 'developing'
                             : 'beginner';
-            return {
-                questionType: String(row.question_type ?? 'unknown'),
-                total,
-                correct,
-                accuracy,
-                masteryLevel,
-            };
+            return { questionType: String(row.question_type ?? 'unknown'), total, correct, accuracy, masteryLevel };
         });
     }
 
@@ -519,10 +478,7 @@ export class AnalyticsServiceService {
 
         const adaptiveStudyPlan = this.buildAdaptiveStudyPlan(bandProfiles, mastery);
         const avgBand = Number(attemptStats.averageBand ?? 0);
-        const examReadiness = Math.max(
-            0,
-            Math.min(100, Math.round((avgBand / 9) * 100)),
-        );
+        const examReadiness = Math.max(0, Math.min(100, Math.round((avgBand / 9) * 100)));
 
         return {
             bandProfiles,
@@ -537,6 +493,159 @@ export class AnalyticsServiceService {
             questionTypeMastery: mastery,
             adaptiveStudyPlan,
             rubricBreakdown,
+        };
+    }
+
+    // ─── Admin Global Stats ───────────────────────────────────────────────────────
+
+    async getAdminGlobalStats(): Promise<{
+        totalLearners: number;
+        totalAttempts: number;
+        completedAttempts: number;
+        averageBand: number;
+        attemptsPerDay: Array<{ date: string; count: number }>;
+        bandDistribution: Array<{ range: string; count: number; color: string }>;
+        skillBreakdown: Array<{ skill: string; avgBand: number; totalAttempts: number }>;
+        topLearners: Array<{ learnerId: string; email: string; avgBand: number; totalAttempts: number }>;
+        recentActivity: Array<{ email: string; testTitle: string; bandScore: number | null; submittedAt: string }>;
+    }> {
+        const db = this.dataSource;
+
+        // Total learners
+        const [learnerCountRow] = await db.query(`SELECT COUNT(*)::int AS cnt FROM learner_profiles`);
+        const totalLearners = Number(learnerCountRow?.cnt ?? 0);
+
+        // Total & completed attempts + avg band
+        const [attemptsRow] = await db.query(`
+            SELECT
+                COUNT(*)::int AS total,
+                COUNT(submitted_at)::int AS completed,
+                COALESCE(AVG(band_score) FILTER (WHERE band_score IS NOT NULL), 0)::float AS avg_band
+            FROM test_attempts
+        `);
+        const totalAttempts = Number(attemptsRow?.total ?? 0);
+        const completedAttempts = Number(attemptsRow?.completed ?? 0);
+        const averageBand = Number(Number(attemptsRow?.avg_band ?? 0).toFixed(2));
+
+        // Attempts per day — last 30 days
+        const attemptsPerDayRows: Array<{ day: string; cnt: string }> = await db.query(`
+            SELECT
+                TO_CHAR(started_at::date, 'YYYY-MM-DD') AS day,
+                COUNT(*)::int AS cnt
+            FROM test_attempts
+            WHERE started_at >= NOW() - INTERVAL '30 days'
+            GROUP BY day
+            ORDER BY day ASC
+        `);
+        const attemptsPerDay = attemptsPerDayRows.map((r) => ({
+            date: r.day,
+            count: Number(r.cnt),
+        }));
+
+        // Band distribution buckets
+        const bandDistRows: Array<{ bucket: string; cnt: string }> = await db.query(`
+            SELECT
+                CASE
+                    WHEN band_score < 4   THEN '0–4'
+                    WHEN band_score < 5.5 THEN '4–5.5'
+                    WHEN band_score < 6.5 THEN '5.5–6.5'
+                    WHEN band_score < 7.5 THEN '6.5–7.5'
+                    ELSE '7.5–9'
+                END AS bucket,
+                COUNT(*)::int AS cnt
+            FROM test_attempts
+            WHERE band_score IS NOT NULL
+              AND submitted_at IS NOT NULL
+            GROUP BY bucket
+            ORDER BY MIN(band_score)
+        `);
+        const bucketColors: Record<string, string> = {
+            '0–4': '#f87171', '4–5.5': '#fb923c', '5.5–6.5': '#facc15',
+            '6.5–7.5': '#4ade80', '7.5–9': '#34d399',
+        };
+        const bandDistribution = bandDistRows.map((r) => ({
+            range: r.bucket,
+            count: Number(r.cnt),
+            color: bucketColors[r.bucket] ?? '#94a3b8',
+        }));
+
+        // Skill breakdown
+        const skillRows: Array<{ skill: string; avg_band: string; total: string }> = await db.query(`
+            SELECT
+                t.skill,
+                COALESCE(AVG(ta.band_score), 0)::float AS avg_band,
+                COUNT(*)::int AS total
+            FROM test_attempts ta
+            INNER JOIN tests t ON t.id = ta.test_id
+            WHERE ta.submitted_at IS NOT NULL
+              AND ta.band_score IS NOT NULL
+            GROUP BY t.skill
+            ORDER BY t.skill
+        `);
+        const skillBreakdown = skillRows.map((r) => ({
+            skill: r.skill,
+            avgBand: Number(Number(r.avg_band).toFixed(2)),
+            totalAttempts: Number(r.total),
+        }));
+
+        // Top 5 learners by avg band (min 1 completed attempt)
+        const topLearnerRows: Array<{ learner_id: string; email: string; avg_band: string; total: string }> =
+            await db.query(`
+            SELECT
+                ta.learner_id,
+                a.email,
+                AVG(ta.band_score)::float AS avg_band,
+                COUNT(*)::int AS total
+            FROM test_attempts ta
+            INNER JOIN learner_profiles lp ON lp.id = ta.learner_id
+            INNER JOIN accounts a ON a.id = lp.account_id
+            WHERE ta.submitted_at IS NOT NULL
+              AND ta.band_score IS NOT NULL
+            GROUP BY ta.learner_id, a.email
+            HAVING COUNT(*) >= 1
+            ORDER BY avg_band DESC
+            LIMIT 5
+        `);
+        const topLearners = topLearnerRows.map((r) => ({
+            learnerId: r.learner_id,
+            email: r.email,
+            avgBand: Number(Number(r.avg_band).toFixed(2)),
+            totalAttempts: Number(r.total),
+        }));
+
+        // Recent 10 submissions
+        const recentRows: Array<{ email: string; title: string; band_score: string | null; submitted_at: string }> =
+            await db.query(`
+            SELECT
+                a.email,
+                t.title,
+                ta.band_score,
+                ta.submitted_at
+            FROM test_attempts ta
+            INNER JOIN tests t ON t.id = ta.test_id
+            INNER JOIN learner_profiles lp ON lp.id = ta.learner_id
+            INNER JOIN accounts a ON a.id = lp.account_id
+            WHERE ta.submitted_at IS NOT NULL
+            ORDER BY ta.submitted_at DESC
+            LIMIT 10
+        `);
+        const recentActivity = recentRows.map((r) => ({
+            email: r.email,
+            testTitle: r.title,
+            bandScore: r.band_score != null ? Number(r.band_score) : null,
+            submittedAt: new Date(r.submitted_at).toISOString(),
+        }));
+
+        return {
+            totalLearners,
+            totalAttempts,
+            completedAttempts,
+            averageBand,
+            attemptsPerDay,
+            bandDistribution,
+            skillBreakdown,
+            topLearners,
+            recentActivity,
         };
     }
 }

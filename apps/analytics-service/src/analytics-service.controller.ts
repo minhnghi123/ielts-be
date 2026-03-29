@@ -23,6 +23,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 export class AnalyticsServiceController {
     constructor(private readonly service: AnalyticsServiceService) { }
 
+    // ─── Learner endpoints ────────────────────────────────────────────────────────
+
     @Get('summary/:learnerId')
     @ApiOperation({ summary: 'Get full dashboard summary for a learner' })
     getDashboardSummary(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
@@ -83,5 +85,15 @@ export class AnalyticsServiceController {
     })
     syncAll() {
         return this.service.syncAllLearnersAnalytics();
+    }
+
+    // ─── Admin endpoints ──────────────────────────────────────────────────────────
+
+    @Get('admin/global-stats')
+    @ApiOperation({
+        summary: 'Platform-wide analytics: total users, attempts per day, band distribution, top learners',
+    })
+    getAdminGlobalStats() {
+        return this.service.getAdminGlobalStats();
     }
 }

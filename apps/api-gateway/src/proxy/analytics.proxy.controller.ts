@@ -4,8 +4,16 @@ import { ProxyService } from '../proxy/proxy.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
 /**
- * Proxies:
- *   /api/analytics/*  → analytics-service /analytics/*
+ * Proxies all routes starting with /api/analytics → analytics-service :5004
+ * Pattern covers:
+ *   /api/analytics
+ *   /api/analytics/summary/:id
+ *   /api/analytics/band-profiles/:id
+ *   /api/analytics/progress/:id
+ *   /api/analytics/mistakes/:id
+ *   /api/analytics/sync/:id
+ *   /api/analytics/sync-all
+ *   /api/analytics/admin/global-stats
  */
 @ApiTags('Analytics (Proxy)')
 @Controller('api')
@@ -18,9 +26,15 @@ export class AnalyticsProxyController {
     }
 
     @All('analytics')
-    @All(['analytics', 'analytics/*'])
-    @ApiOperation({ summary: 'Proxy analytics routes → analytics-service :5004' })
-    async proxy(@Req() req: Request, @Res() res: Response): Promise<void> {
+    @ApiOperation({ summary: 'Proxy analytics root route → analytics-service :5004' })
+    async proxyRoot(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
+        await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
+    }
+
+    @All('analytics/*')
+    @ApiOperation({ summary: 'Proxy analytics/* routes → analytics-service :5004' })
+    async proxyWildcard(@Req() req: Request, @Res() res: Response): Promise<void> {
         const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
