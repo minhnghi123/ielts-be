@@ -25,6 +25,9 @@ export class WritingTask {
   @Column({ type: 'text' })
   prompt: string;
 
-  @Column({ name: 'word_limit' })
+  @Column({ name: 'word_limit', default: 0 })
   wordLimit: number;
+
+  @Column({ type: 'jsonb', default: '{}' })
+  config: Record<string, any>;
 }

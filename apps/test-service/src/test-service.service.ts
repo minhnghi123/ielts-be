@@ -22,6 +22,8 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
+import { CreateWritingTestDto } from './dto/create-writing-test.dto';
+import { CreateSpeakingTestDto } from './dto/create-speaking-test.dto';
 import { QueryTestsDto } from './dto/query-tests.dto';
 import { CreateManualTestDto } from './dto/create-manual-test.dto';
 
@@ -420,6 +422,198 @@ export class TestServiceService {
         await this.getTestById(testId);
         const part = this.speakingPartRepo.create({ ...dto, testId });
         return this.speakingPartRepo.save(part);
+    }
+
+    // ─── Writing Test (Full Creation & Update) ─────────────────────────────────────────
+
+    async createWritingTest(dto: CreateWritingTestDto): Promise<Test> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            const test = queryRunner.manager.create(Test, {
+                skill: 'writing' as any,
+                title: dto.title,
+                isMock: dto.isMock,
+                createdBy: dto.createdBy,
+            });
+            const savedTest = await queryRunner.manager.save(Test, test);
+
+            for (const taskDto of dto.tasks) {
+                const task = queryRunner.manager.create(WritingTask, {
+                    testId: savedTest.id,
+                    taskNumber: taskDto.taskNumber,
+                    prompt: taskDto.promptText,
+                    wordLimit: 0,
+                    config: {
+                        timeLimit: taskDto.timeLimit ?? (taskDto.taskNumber === 1 ? 20 : 40),
+                        mediaUrl: taskDto.mediaUrl ?? null,
+                        rubric: taskDto.rubric ?? [],
+                    },
+                });
+                await queryRunner.manager.save(WritingTask, task);
+            }
+
+            await queryRunner.commitTransaction();
+            return this.getTestById(savedTest.id);
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
+    async updateWritingTest(id: string, dto: CreateWritingTestDto): Promise<Test> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            // Update base test
+            await queryRunner.manager.update(Test, { id }, {
+                title: dto.title,
+                isMock: dto.isMock,
+            });
+
+            // Delete old tasks
+            // We use delete from repository for cascading or just direct delete
+            await queryRunner.manager.delete(WritingTask, { testId: id });
+
+            // Insert new tasks
+            for (const taskDto of dto.tasks) {
+                const task = queryRunner.manager.create(WritingTask, {
+                    testId: id,
+                    taskNumber: taskDto.taskNumber,
+                    prompt: taskDto.promptText,
+                    wordLimit: 0,
+                    config: {
+                        timeLimit: taskDto.timeLimit ?? (taskDto.taskNumber === 1 ? 20 : 40),
+                        mediaUrl: taskDto.mediaUrl ?? null,
+                        rubric: taskDto.rubric ?? [],
+                    },
+                });
+                await queryRunner.manager.save(WritingTask, task);
+            }
+
+            await queryRunner.commitTransaction();
+            return this.getTestById(id);
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
+    // ─── Speaking Test (Full Creation & Update) ────────────────────────────────────────
+
+    async createSpeakingTest(dto: CreateSpeakingTestDto): Promise<Test> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            const test = queryRunner.manager.create(Test, {
+                skill: 'speaking' as any,
+                title: dto.title,
+                isMock: dto.isMock,
+                createdBy: dto.createdBy,
+            });
+            const savedTest = await queryRunner.manager.save(Test, test);
+
+            // Part 1 – Interview questions
+            const part1 = queryRunner.manager.create(SpeakingPart, {
+                testId: savedTest.id,
+                partNumber: 1,
+                prompt: undefined,
+                config: { topics: dto.part1.topics },
+            });
+            await queryRunner.manager.save(SpeakingPart, part1);
+
+            // Part 2 – Cue card
+            const part2 = queryRunner.manager.create(SpeakingPart, {
+                testId: savedTest.id,
+                partNumber: 2,
+                prompt: dto.part2.mainTopic,
+                config: {
+                    cues: dto.part2.cues,
+                    prepTime: dto.part2.prepTime ?? 1,
+                    speakTime: dto.part2.speakTime ?? 2,
+                },
+            });
+            await queryRunner.manager.save(SpeakingPart, part2);
+
+            // Part 3 – Discussion
+            const part3 = queryRunner.manager.create(SpeakingPart, {
+                testId: savedTest.id,
+                partNumber: 3,
+                prompt: undefined,
+                config: { questions: dto.part3.questions },
+            });
+            await queryRunner.manager.save(SpeakingPart, part3);
+
+            await queryRunner.commitTransaction();
+            return this.getTestById(savedTest.id);
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
+    }
+
+    async updateSpeakingTest(id: string, dto: CreateSpeakingTestDto): Promise<Test> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            // Update base test
+            await queryRunner.manager.update(Test, { id }, {
+                title: dto.title,
+                isMock: dto.isMock,
+            });
+
+            // Delete old parts
+            await queryRunner.manager.delete(SpeakingPart, { testId: id });
+
+            // Insert new Part 1
+            const part1 = queryRunner.manager.create(SpeakingPart, {
+                testId: id,
+                partNumber: 1,
+                prompt: undefined,
+                config: { topics: dto.part1.topics },
+            });
+            await queryRunner.manager.save(SpeakingPart, part1);
+
+            // Insert new Part 2
+            const part2 = queryRunner.manager.create(SpeakingPart, {
+                testId: id,
+                partNumber: 2,
+                prompt: dto.part2.mainTopic,
+                config: {
+                    cues: dto.part2.cues,
+                    prepTime: dto.part2.prepTime ?? 1,
+                    speakTime: dto.part2.speakTime ?? 2,
+                },
+            });
+            await queryRunner.manager.save(SpeakingPart, part2);
+
+            // Insert new Part 3
+            const part3 = queryRunner.manager.create(SpeakingPart, {
+                testId: id,
+                partNumber: 3,
+                prompt: undefined,
+                config: { questions: dto.part3.questions },
+            });
+            await queryRunner.manager.save(SpeakingPart, part3);
+
+            await queryRunner.commitTransaction();
+            return this.getTestById(id);
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        } finally {
+            await queryRunner.release();
+        }
     }
 
     // ─── Test Attempts (Joining & Submitting) ──────────────────────────────────

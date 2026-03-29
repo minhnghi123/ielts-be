@@ -24,4 +24,7 @@ export class SpeakingPart {
 
   @Column({ type: 'text', nullable: true })
   prompt: string;
+
+  @Column({ type: 'jsonb', default: '{}' })
+  config: Record<string, any>;
 }

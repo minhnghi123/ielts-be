@@ -29,6 +29,8 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { CreateWritingTaskDto } from './dto/create-writing-task.dto';
 import { CreateSpeakingPartDto } from './dto/create-speaking-part.dto';
+import { CreateWritingTestDto } from './dto/create-writing-test.dto';
+import { CreateSpeakingTestDto } from './dto/create-speaking-test.dto';
 import { QueryTestsDto } from './dto/query-tests.dto';
 import { CreateManualTestDto } from './dto/create-manual-test.dto';
 import { SubmitTestAttemptDto } from './dto/submit-test.dto';
@@ -151,6 +153,44 @@ export class TestServiceController {
   @ApiResponse({ status: 201, description: 'Manual test created successfully' })
   createManualTest(@Body() dto: CreateManualTestDto) {
     return this.testService.createManualTest(dto);
+  }
+
+  @Post('tests/writing')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a full Writing test (Task 1 + Task 2 with rich config)' })
+  @ApiResponse({ status: 201, description: 'Writing test created' })
+  createWritingTest(@Body() dto: CreateWritingTestDto) {
+    return this.testService.createWritingTest(dto);
+  }
+
+  @Post('tests/speaking')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a full Speaking test (Part 1 + Part 2 + Part 3 with rich config)' })
+  @ApiResponse({ status: 201, description: 'Speaking test created' })
+  createSpeakingTest(@Body() dto: CreateSpeakingTestDto) {
+    return this.testService.createSpeakingTest(dto);
+  }
+
+  @Put('tests/:id/writing')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a full Writing test (Atomic replace)' })
+  @ApiResponse({ status: 200, description: 'Writing test updated' })
+  updateWritingTest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateWritingTestDto,
+  ) {
+    return this.testService.updateWritingTest(id, dto);
+  }
+
+  @Put('tests/:id/speaking')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a full Speaking test (Atomic replace)' })
+  @ApiResponse({ status: 200, description: 'Speaking test updated' })
+  updateSpeakingTest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateSpeakingTestDto,
+  ) {
+    return this.testService.updateSpeakingTest(id, dto);
   }
 
   @Put('tests/:id')
