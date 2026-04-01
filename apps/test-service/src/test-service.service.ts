@@ -468,7 +468,9 @@ export class TestServiceService {
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
+
         try {
+
             // Update base test
             await queryRunner.manager.update(Test, { id }, {
                 title: dto.title,
