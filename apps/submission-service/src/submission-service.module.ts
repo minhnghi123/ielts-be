@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SubmissionServiceController } from './submission-service.controller';
 import { SubmissionServiceService } from './submission-service.service';
 import { TestAttempt } from './entities/test-attempt.entity';
@@ -16,22 +16,40 @@ import { SpeakingScore } from './entities/speaking-score.entity';
             isGlobal: true,
             envFilePath: './apps/submission-service/.env',
         }),
-        TypeOrmModule.forRoot({
-            type: 'postgres',
-            host: process.env.DB_HOST,
-            port: parseInt(process.env.DB_PORT || '5432', 10),
-            username: process.env.DB_USERNAME,
-            password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME,
-            entities: [
-                TestAttempt,
-                QuestionAttempt,
-                WritingSubmission,
-                SpeakingSubmission,
-                WritingScore,
-                SpeakingScore,
-            ],
-            synchronize: false,
+        // Use forRootAsync so ConfigModule finishes loading BEFORE TypeORM reads env vars
+        TypeOrmModule.forRootAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => {
+                const username = config.get<string>('DB_USERNAME') || process.env.DB_USERNAME;
+                console.log(`[SUBMISSION-DB] Connecting with user: ${username}`);
+                return {
+                    type: 'postgres',
+                    host: config.get<string>('DB_HOST') || process.env.DB_HOST,
+                    port: parseInt(config.get<string>('DB_PORT') || process.env.DB_PORT || '6543', 10),
+                    username,
+                    password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
+                    database: config.get<string>('DB_NAME') || process.env.DB_NAME,
+                    ssl: { rejectUnauthorized: false },
+                    entities: [
+                        TestAttempt,
+                        QuestionAttempt,
+                        WritingSubmission,
+                        SpeakingSubmission,
+                        WritingScore,
+                        SpeakingScore,
+                    ],
+                    synchronize: false,
+                    // Connection pool settings for Supabase PgBouncer (transaction mode)
+                    extra: {
+                        max: 5,
+                        connectionTimeoutMillis: 10_000,
+                        idleTimeoutMillis: 30_000,
+                    },
+                    retryAttempts: 5,
+                    retryDelay: 3000,
+                };
+            },
         }),
         TypeOrmModule.forFeature([
             TestAttempt,
