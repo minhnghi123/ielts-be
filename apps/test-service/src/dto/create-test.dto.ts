@@ -16,6 +16,6 @@ export class CreateTestDto {
   isMock: boolean;
 
   @ApiProperty({ description: 'UUID of the admin who creates the test' })
-  @IsUUID()
+  @IsString()
   createdBy: string;
 }

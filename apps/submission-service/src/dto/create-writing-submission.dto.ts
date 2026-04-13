@@ -3,11 +3,11 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateWritingSubmissionDto {
     @ApiProperty({ description: 'UUID of the learner_profile' })
-    @IsUUID()
+    @IsString()
     learnerId: string;
 
     @ApiProperty({ description: 'UUID of the writing_task' })
-    @IsUUID()
+    @IsString()
     writingTaskId: string;
 
     @ApiProperty({ description: 'Essay content' })

@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class SaveAnswerDto {
     @ApiProperty({ description: 'UUID of the question' })
-    @IsUUID()
+    @IsString()
     questionId: string;
 
     @ApiProperty({ description: "Learner's answer text" })

@@ -14,6 +14,7 @@ import { StartAttemptDto } from './dto/start-attempt.dto';
 import { SaveAnswerDto } from './dto/save-answer.dto';
 import { CreateWritingSubmissionDto } from './dto/create-writing-submission.dto';
 import { CreateSpeakingSubmissionDto } from './dto/create-speaking-submission.dto';
+import { CreateWritingGradingDto } from './dto/create-writing-grading.dto';
 import {
     ApiTags,
     ApiOperation,
@@ -95,6 +96,27 @@ export class SubmissionServiceController {
     @ApiOperation({ summary: "List a learner's writing submissions" })
     getWritingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
         return this.service.getWritingSubmissionsByLearner(learnerId);
+    }
+
+    // ─── AI Writing Gradings ──────────────────────────────────────────────────────
+
+    @Post('writing-gradings')
+    @ApiOperation({ summary: 'Save AI writing grading result' })
+    @ApiResponse({ status: 201, description: 'Grading saved' })
+    createWritingGrading(@Body() dto: CreateWritingGradingDto) {
+        return this.service.createWritingGrading(dto);
+    }
+
+    @Get('writing-gradings/:id')
+    @ApiOperation({ summary: 'Get AI writing grading by ID' })
+    getWritingGrading(@Param('id', ParseUUIDPipe) id: string) {
+        return this.service.getWritingGrading(id);
+    }
+
+    @Get('writing-gradings/by-submission/:submissionId')
+    @ApiOperation({ summary: 'Get AI writing grading by submission ID' })
+    getWritingGradingBySubmission(@Param('submissionId', ParseUUIDPipe) submissionId: string) {
+        return this.service.getWritingGradingBySubmission(submissionId);
     }
 
     // ─── Speaking Submissions ─────────────────────────────────────────────────────

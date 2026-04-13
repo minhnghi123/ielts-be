@@ -9,6 +9,7 @@ import { WritingSubmission } from './entities/writing-submission.entity';
 import { SpeakingSubmission } from './entities/speaking-submission.entity';
 import { WritingScore } from './entities/writing-score.entity';
 import { SpeakingScore } from './entities/speaking-score.entity';
+import { AiWritingGrading } from './entities/ai-writing-grading.entity';
 
 @Module({
     imports: [
@@ -38,6 +39,7 @@ import { SpeakingScore } from './entities/speaking-score.entity';
                         SpeakingSubmission,
                         WritingScore,
                         SpeakingScore,
+                        AiWritingGrading,
                     ],
                     synchronize: false,
                     // Connection pool settings for Supabase PgBouncer (transaction mode)
@@ -58,6 +60,7 @@ import { SpeakingScore } from './entities/speaking-score.entity';
             SpeakingSubmission,
             WritingScore,
             SpeakingScore,
+            AiWritingGrading,
         ]),
     ],
     controllers: [SubmissionServiceController],

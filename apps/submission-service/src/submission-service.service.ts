@@ -11,6 +11,8 @@ import { StartAttemptDto } from './dto/start-attempt.dto';
 import { SaveAnswerDto } from './dto/save-answer.dto';
 import { CreateWritingSubmissionDto } from './dto/create-writing-submission.dto';
 import { CreateSpeakingSubmissionDto } from './dto/create-speaking-submission.dto';
+import { CreateWritingGradingDto } from './dto/create-writing-grading.dto';
+import { AiWritingGrading } from './entities/ai-writing-grading.entity';
 
 // IELTS Raw Score → Band Score mapping for Reading (40 questions)
 const READING_BAND_MAP: Record<number, number> = {
@@ -104,6 +106,8 @@ export class SubmissionServiceService {
         private readonly writingScoreRepo: Repository<WritingScore>,
         @InjectRepository(SpeakingScore)
         private readonly speakingScoreRepo: Repository<SpeakingScore>,
+        @InjectRepository(AiWritingGrading)
+        private readonly aiWritingGradingRepo: Repository<AiWritingGrading>,
         private readonly dataSource: DataSource,
     ) { }
 
@@ -261,6 +265,48 @@ export class SubmissionServiceService {
             where: { learnerId },
             order: { submittedAt: 'DESC' },
         });
+    }
+
+    // ─── AI Writing Gradings ──────────────────────────────────────────────────────
+
+    async createWritingGrading(
+        dto: CreateWritingGradingDto,
+    ): Promise<AiWritingGrading> {
+        const grading = this.aiWritingGradingRepo.create({
+            submissionId: dto.submissionId,
+            modelName: dto.modelName,
+            modelVersion: dto.modelVersion,
+            promptVersion: dto.promptVersion,
+            taskResponse: dto.taskResponse,
+            coherence: dto.coherence,
+            lexical: dto.lexical,
+            grammar: dto.grammar,
+            overallBand: dto.overallBand,
+            feedback: dto.feedback,
+            confidenceScore: dto.confidenceScore,
+            gradedAt: new Date(),
+        });
+        const saved = await this.aiWritingGradingRepo.save(grading);
+
+        // Update the linked writing_submission grading_status to 'ai_graded' and overall_band
+        if (dto.overallBand) {
+            await this.dataSource.query(
+                `UPDATE writing_submissions SET grading_status = 'ai_graded', overall_band = $1 WHERE id = $2`,
+                [dto.overallBand, dto.submissionId],
+            );
+        }
+
+        return saved;
+    }
+
+    async getWritingGrading(id: string): Promise<AiWritingGrading> {
+        const grading = await this.aiWritingGradingRepo.findOne({ where: { id } });
+        if (!grading) throw new NotFoundException(`Writing grading #${id} not found`);
+        return grading;
+    }
+
+    async getWritingGradingBySubmission(submissionId: string): Promise<AiWritingGrading | null> {
+        return this.aiWritingGradingRepo.findOne({ where: { submissionId } });
     }
 
     // ─── Speaking Submissions ─────────────────────────────────────────────────────

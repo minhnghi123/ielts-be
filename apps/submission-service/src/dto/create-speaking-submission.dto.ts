@@ -3,11 +3,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSpeakingSubmissionDto {
     @ApiProperty({ description: 'UUID of the learner_profile' })
-    @IsUUID()
+    @IsString()
     learnerId: string;
 
     @ApiProperty({ description: 'UUID of the speaking_part' })
-    @IsUUID()
+    @IsString()
     speakingPartId: string;
 
     @ApiProperty({ description: 'URL of the recorded audio file' })

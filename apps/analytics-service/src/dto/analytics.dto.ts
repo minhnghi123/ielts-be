@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpsertBandProfileDto {
     @ApiProperty({ description: 'UUID of the learner_profile' })
-    @IsUUID()
+    @IsString()
     learnerId: string;
 
     @ApiProperty({
@@ -29,7 +29,7 @@ export class UpsertBandProfileDto {
 
 export class CreateSnapshotDto {
     @ApiProperty({ description: 'UUID of the learner_profile' })
-    @IsUUID()
+    @IsString()
     learnerId: string;
 
     @ApiProperty({ example: 6.5 })
@@ -41,11 +41,11 @@ export class CreateSnapshotDto {
 
 export class CreateMistakeDto {
     @ApiProperty({ description: 'UUID of the learner_profile' })
-    @IsUUID()
+    @IsString()
     learnerId: string;
 
     @ApiProperty({ description: 'UUID of the question' })
-    @IsUUID()
+    @IsString()
     questionId: string;
 
     @ApiPropertyOptional({ example: 'fill_in_blank' })

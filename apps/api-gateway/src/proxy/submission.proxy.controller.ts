@@ -44,6 +44,14 @@ export class SubmissionProxyController {
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
+    @All('writing-gradings')
+    @All('writing-gradings/*')
+    @ApiOperation({ summary: 'Proxy AI writing grading routes → submission-service :5003' })
+    async proxyWritingGradings(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
+        await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
+    }
+
     @All('speaking-submissions')
     @All('speaking-submissions/*')
     @ApiOperation({ summary: 'Proxy speaking submission routes → submission-service :5003' })
