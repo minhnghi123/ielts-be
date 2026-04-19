@@ -94,10 +94,10 @@ export class CreateSpeakingTestDto {
   @IsBoolean()
   isMock: boolean;
 
-  @ApiProperty({ example: 'uuid-of-admin' })
+  @ApiPropertyOptional({ example: 'uuid-of-admin' })
   @IsString()
-  @IsNotEmpty()
-  createdBy: string;
+  @IsOptional()
+  createdBy?: string;
 
   @ApiProperty({ type: () => SpeakingPart1Dto })
   @ValidateNested()

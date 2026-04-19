@@ -880,6 +880,8 @@ export class TestServiceService {
             bandScore = attempt.test.skill === 'listening'
                 ? this.calculateListeningBand(rawScore)
                 : this.calculateReadingBand(rawScore);
+        } else if (dto.bandScore !== undefined) {
+            bandScore = dto.bandScore;
         }
 
         // Use update() instead of save() to avoid TypeORM cascade wiping questionAttempts

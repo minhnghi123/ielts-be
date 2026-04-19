@@ -20,16 +20,14 @@ export class SubmissionProxyController {
             process.env.SUBMISSION_SERVICE_URL || 'http://localhost:5003';
     }
 
-    @All('attempts')
-    @All('attempts/*')
+    @All(['attempts', 'attempts/*'])
     @ApiOperation({ summary: 'Proxy attempt routes → submission-service :5003' })
     async proxyAttempts(@Req() req: Request, @Res() res: Response): Promise<void> {
         const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
-    @All('stats')
-    @All('stats/*')
+    @All(['stats', 'stats/*'])
     @ApiOperation({ summary: 'Proxy stats routes → submission-service :5003' })
     async proxyStats(@Req() req: Request, @Res() res: Response): Promise<void> {
         const path = (req.originalUrl || req.url).replace(/^\/api/, '');
@@ -50,16 +48,14 @@ export class SubmissionProxyController {
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
-    @All('speaking-submissions')
-    @All('speaking-submissions/*')
+    @All(['speaking-submissions', 'speaking-submissions/*'])
     @ApiOperation({ summary: 'Proxy speaking submission routes → submission-service :5003' })
     async proxySpeaking(@Req() req: Request, @Res() res: Response): Promise<void> {
         const path = (req.originalUrl || req.url).replace(/^\/api/, '');
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
-    @All('learners')
-    @All('learners/*')
+    @All(['learners', 'learners/*'])
     @ApiOperation({ summary: 'Proxy learner routes → submission-service :5003' })
     async proxyLearners(@Req() req: Request, @Res() res: Response): Promise<void> {
         const path = (req.originalUrl || req.url).replace(/^\/api/, '');

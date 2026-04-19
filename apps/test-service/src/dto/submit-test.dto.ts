@@ -16,4 +16,8 @@ export class SubmitTestAttemptDto {
     @ValidateNested({ each: true })
     @Type(() => QuestionAttemptDto)
     answers: QuestionAttemptDto[];
+
+    @IsOptional()
+    bandScore?: number;
+
 }
