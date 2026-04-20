@@ -21,6 +21,8 @@ import {
   FilesInterceptor,
   AnyFilesInterceptor,
 } from '@nestjs/platform-express';
+import { MessagePattern, Payload } from '@nestjs/microservices';
+import { RMQ_PATTERNS } from '@app/common';
 import { TestServiceService } from './test-service.service';
 import { ImportTestService } from './import/import-test.service';
 import { CreateTestDto } from './dto/create-test.dto';
@@ -395,5 +397,17 @@ export class TestServiceController {
     @Body('aiFeedback') aiFeedback: string,
   ) {
     await this.testService.saveAiFeedback(attemptId, aiFeedback);
+  }
+
+  // ─── Asynchronous Handlers (Message Broker RPC) ─────────────────────────────
+
+  @MessagePattern(RMQ_PATTERNS.TEST.GET_ANSWERS)
+  async getAnswersForQuestions(@Payload() questionIds: string[]) {
+    return this.testService.getAnswersForQuestions(questionIds);
+  }
+
+  @MessagePattern(RMQ_PATTERNS.TEST.GET_SKILL)
+  async getTestSkill(@Payload() testId: string) {
+    return this.testService.getTestSkill(testId);
   }
 }

@@ -8,7 +8,10 @@ import {
     ParseUUIDPipe,
     HttpCode,
     HttpStatus,
+    Logger,
 } from '@nestjs/common';
+import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
+import { RMQ_PATTERNS } from '@app/common';
 import { SubmissionServiceService } from './submission-service.service';
 import { StartAttemptDto } from './dto/start-attempt.dto';
 import { SaveAnswerDto } from './dto/save-answer.dto';
@@ -26,6 +29,8 @@ import {
 @ApiBearerAuth()
 @Controller()
 export class SubmissionServiceController {
+    private readonly logger = new Logger(SubmissionServiceController.name);
+
     constructor(private readonly service: SubmissionServiceService) { }
 
     // ─── Test Attempts ────────────────────────────────────────────────────────────
@@ -137,5 +142,48 @@ export class SubmissionServiceController {
     @ApiOperation({ summary: "List a learner's speaking submissions" })
     getSpeakingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
         return this.service.getSpeakingSubmissionsByLearner(learnerId);
+    }
+
+    // ─── Asynchronous Handlers (Message Broker) ───────────────────────────────────
+
+    @EventPattern(RMQ_PATTERNS.GRADING.GRADE_WRITING)
+    async handleGradeWritingEvent(@Payload() data: any, @Ctx() context: RmqContext) {
+        this.logger.log(`[RMQ Worker] Received GRADE_WRITING for submission: ${data.submissionId}`);
+        const channel = context.getChannelRef();
+        const originalMsg = context.getMessage();
+
+        try {
+            // TODO: Integrate LLM AI call here in the future.
+            // For now, we simulate processing and mark as graded
+            this.logger.debug(`[RMQ Worker] Processing writing content: ${data.content?.substring(0, 50)}...`);
+            
+            // Simulating a long-running AI request
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            
+            this.logger.log(`[RMQ Worker] Grading completed successfully for submission: ${data.submissionId}`);
+            channel.ack(originalMsg);
+        } catch (error) {
+            this.logger.error(`[RMQ Worker] Error grading writing task: ${error.message}`);
+            // Nack the message and do not requeue if we don't want an infinite loop, or requeue if transient
+            channel.nack(originalMsg, false, false);
+        }
+    }
+
+    @EventPattern(RMQ_PATTERNS.GRADING.GRADE_SPEAKING)
+    async handleGradeSpeakingEvent(@Payload() data: any, @Ctx() context: RmqContext) {
+        this.logger.log(`[RMQ Worker] Received GRADE_SPEAKING for submission: ${data.submissionId}`);
+        const channel = context.getChannelRef();
+        const originalMsg = context.getMessage();
+
+        try {
+            // TODO: Integrate Audio/LLM AI call here.
+            this.logger.debug(`[RMQ Worker] Processing speaking audio: ${data.audioUrl}`);
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            this.logger.log(`[RMQ Worker] Grading completed successfully for submission: ${data.submissionId}`);
+            channel.ack(originalMsg);
+        } catch (error) {
+            this.logger.error(`[RMQ Worker] Error grading speaking task: ${error.message}`);
+            channel.nack(originalMsg, false, false);
+        }
     }
 }

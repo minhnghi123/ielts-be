@@ -1010,4 +1010,19 @@ export class TestServiceService {
         if (rawScore >= 4) return 2.5;
         return 2.0;
     }
+
+    // ─── RPC Helpers ────────────────────────────────────────────────────────────
+
+    async getAnswersForQuestions(questionIds: string[]) {
+        if (!questionIds || questionIds.length === 0) return [];
+        return this.answerRepo.createQueryBuilder('qa')
+            .select(['qa.questionId', 'qa.correctAnswers', 'qa.caseSensitive'])
+            .where('qa.questionId IN (:...questionIds)', { questionIds })
+            .getMany();
+    }
+
+    async getTestSkill(testId: string) {
+        const test = await this.testRepo.findOne({ where: { id: testId }, select: ['skill'] });
+        return { skill: test?.skill || 'reading' };
+    }
 }

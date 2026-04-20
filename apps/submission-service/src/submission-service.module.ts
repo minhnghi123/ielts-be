@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SubmissionServiceController } from './submission-service.controller';
@@ -17,6 +18,23 @@ import { AiWritingGrading } from './entities/ai-writing-grading.entity';
             isGlobal: true,
             envFilePath: './apps/submission-service/.env',
         }),
+        ClientsModule.registerAsync([
+            {
+                name: 'RMQ_SERVICE',
+                imports: [ConfigModule],
+                inject: [ConfigService],
+                useFactory: (config: ConfigService) => ({
+                    type: Transport.RMQ,
+                    options: {
+                        urls: [config.get<string>('RABBITMQ_URL') || 'amqp://guest:guest@localhost:5672'],
+                        queue: 'ielts_messages',
+                        queueOptions: {
+                            durable: true,
+                        },
+                    },
+                }),
+            },
+        ]),
         // Use forRootAsync so ConfigModule finishes loading BEFORE TypeORM reads env vars
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],

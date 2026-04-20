@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { SubmissionServiceModule } from './submission-service.module';
 import { SERVICES_PORTS } from '@app/common/constants';
 import { ValidationPipe } from '@nestjs/common';
@@ -28,6 +29,20 @@ async function bootstrap() {
         credentials: true,
     });
 
+    app.connectMicroservice<MicroserviceOptions>({
+        transport: Transport.RMQ,
+        options: {
+            urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672'],
+            queue: 'ielts_messages',
+            queueOptions: {
+                durable: true,
+            },
+            noAck: false,
+            prefetchCount: 1,
+        },
+    });
+
+    await app.startAllMicroservices();
     await app.listen(SERVICES_PORTS.SUBMISSION_SERVICE);
     console.log(`Submission Service running on port ${SERVICES_PORTS.SUBMISSION_SERVICE}`);
 }

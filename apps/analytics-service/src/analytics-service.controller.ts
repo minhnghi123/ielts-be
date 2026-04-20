@@ -8,7 +8,10 @@ import {
     ParseUUIDPipe,
     HttpCode,
     HttpStatus,
+    Logger,
 } from '@nestjs/common';
+import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
+import { RMQ_PATTERNS } from '@app/common';
 import { AnalyticsServiceService } from './analytics-service.service';
 import {
     UpsertBandProfileDto,
@@ -21,6 +24,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @ApiBearerAuth()
 @Controller('analytics')
 export class AnalyticsServiceController {
+    private readonly logger = new Logger(AnalyticsServiceController.name);
+
     constructor(private readonly service: AnalyticsServiceService) { }
 
     // ─── Learner endpoints ────────────────────────────────────────────────────────
@@ -95,5 +100,25 @@ export class AnalyticsServiceController {
     })
     getAdminGlobalStats() {
         return this.service.getAdminGlobalStats();
+    }
+
+    // ─── Asynchronous Handlers (Message Broker) ───────────────────────────────────
+
+    @EventPattern(RMQ_PATTERNS.ANALYTICS.TEST_SUBMITTED)
+    async handleTestSubmittedEvent(@Payload() data: any, @Ctx() context: RmqContext) {
+        this.logger.log(`[RMQ Worker] Received TEST_SUBMITTED event for learner: ${data.learnerId}`);
+        const channel = context.getChannelRef();
+        const originalMsg = context.getMessage();
+
+        try {
+            // Trigger an analytics sync for this learner now that they've submitted a test
+            await this.service.fullSyncLearnerAnalytics(data.learnerId);
+            this.logger.log(`[RMQ Worker] Analytics fully synced for learner: ${data.learnerId}`);
+            channel.ack(originalMsg);
+        } catch (error) {
+            this.logger.error(`[RMQ Worker] Error syncing analytics for ${data.learnerId}: ${error.message}`);
+            // We nack but do not requeue, as a full failure might just trigger next time
+            channel.nack(originalMsg, false, false);
+        }
     }
 }
