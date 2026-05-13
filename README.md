@@ -1,6 +1,6 @@
 <div align="center">
 
-# IELTS Master — Backend
+# IELTS-MN — Backend
 
 **NestJS Microservices API for an AI-powered IELTS practice platform**
 
@@ -15,7 +15,7 @@
 
 ## About the Project
 
-**IELTS Master** is the graduation thesis project of **Nghi Minh Nguyen** — a full-stack online IELTS practice platform powered by large language models.
+**IELTS-MN** is the graduation thesis project of **Nghi Minh Nguyen** — a full-stack online IELTS practice platform powered by large language models.
 
 ### Background & Motivation
 
