@@ -5,6 +5,7 @@ import {
     Put,
     Param,
     Body,
+    Query,
     ParseUUIDPipe,
     HttpCode,
     HttpStatus,
@@ -86,6 +87,13 @@ export class AnalyticsServiceController {
     @ApiOperation({ summary: 'Record a mistake for a learner on a question' })
     recordMistake(@Body() dto: CreateMistakeDto) {
         return this.service.recordMistake(dto);
+    }
+
+    @Get('leaderboard')
+    @ApiOperation({ summary: 'Top learners by average band (visible to every signed-in learner)' })
+    getLeaderboard(@Query('limit') limit: string | undefined, @CurrentUser() user: RequestUser) {
+        const n = Math.min(100, Math.max(1, parseInt(limit ?? '50', 10) || 50));
+        return this.service.getLeaderboard(n, user?.profileId ?? null);
     }
 
     // ─── Sync endpoints ───────────────────────────────────────────────────────────

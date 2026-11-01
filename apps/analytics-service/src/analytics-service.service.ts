@@ -496,6 +496,62 @@ export class AnalyticsServiceService {
         };
     }
 
+    // ─── Leaderboard ──────────────────────────────────────────────────────────────
+
+    /**
+     * Ranks learners by average band over their submitted attempts (ties broken by
+     * attempt count). Emails are masked — only the learner's display name is shown.
+     */
+    async getLeaderboard(limit: number, meLearnerId: string | null) {
+        const rows: Array<{
+            learner_id: string;
+            full_name: string | null;
+            email: string;
+            avatar_url: string | null;
+            avg_band: number;
+            best_band: number;
+            total_attempts: number;
+        }> = await this.dataSource.query(
+            `
+            SELECT lp.id AS learner_id,
+                   a.full_name,
+                   a.email,
+                   a.avatar_url,
+                   ROUND(AVG(ta.band_score)::numeric, 1)::float AS avg_band,
+                   MAX(ta.band_score)::float AS best_band,
+                   COUNT(ta.id)::int AS total_attempts
+            FROM test_attempts ta
+            JOIN learner_profiles lp ON lp.id = ta.learner_id
+            JOIN accounts a ON a.id = lp.account_id
+            WHERE ta.submitted_at IS NOT NULL
+              AND ta.band_score IS NOT NULL
+              AND a.status = 'active'
+            GROUP BY lp.id, a.full_name, a.email, a.avatar_url
+            ORDER BY avg_band DESC, total_attempts DESC, lp.id
+            LIMIT $1
+            `,
+            [limit],
+        );
+
+        return rows.map((r, i) => ({
+            rank: i + 1,
+            learnerId: r.learner_id,
+            displayName: r.full_name?.trim() || this.maskEmail(r.email),
+            avatarUrl: r.avatar_url,
+            avgBand: Number(r.avg_band),
+            bestBand: Number(r.best_band),
+            totalAttempts: Number(r.total_attempts),
+            isMe: meLearnerId !== null && r.learner_id === meLearnerId,
+        }));
+    }
+
+    private maskEmail(email: string): string {
+        const [local, domain] = email.split('@');
+        if (!domain) return 'Learner';
+        const visible = local.slice(0, 2);
+        return `${visible}${'*'.repeat(Math.max(2, local.length - 2))}@${domain}`;
+    }
+
     // ─── Admin Global Stats ───────────────────────────────────────────────────────
 
     async getAdminGlobalStats(): Promise<{
