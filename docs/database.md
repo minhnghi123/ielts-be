@@ -10,12 +10,13 @@ DDL source: [`db/database_schema.sql`](../db/database_schema.sql) — apply manu
 | Service | Tables |
 |---|---|
 | **auth-service** | `accounts`, `learner_profiles`, `admin_profiles`, `admin_roles`, `admin_role_assignments` |
-| **test-service** | `tests`, `sections`, `question_groups`, `questions`, `question_answers`, `writing_tasks`, `speaking_parts`, `test_attempts` (create only) |
-| **submission-service** | `test_attempts` (finalize), `question_attempts`, `writing_submissions`, `writing_scores`, `ai_writing_gradings`, `speaking_submissions`, `speaking_scores` |
+| **test-service** | `tests`, `sections`, `question_groups`, `questions`, `question_answers`, `writing_tasks`, `speaking_parts`, `test_attempts`, `question_attempts` (full attempt lifecycle: start → autosave draft → submit/expire → review) |
+| **submission-service** | `writing_submissions`, `writing_scores`, `ai_writing_gradings`, `speaking_submissions`, `speaking_scores`, read-only global stats |
 | **analytics-service** | `learner_band_profiles`, `learner_mistakes`, `learner_progress_snapshots` |
 
 Cross-service notes:
-- `test_attempts` is **created** by test-service and **finalized** by submission-service. Both services have TypeORM entities for it.
+- `test_attempts` is owned end-to-end by test-service (it holds the answer key needed for grading). `/api/attempts/*` is proxied only to test-service.
+- Migrations live in `db/migrations/` and must be applied manually (`synchronize: false`). `001_exam_realism.sql` adds `tests.difficulty/status/description/duration_minutes` and `test_attempts.status/duration_seconds/expires_at/draft_answers/last_saved_at/is_practice`.
 - analytics-service runs raw cross-service SQL (joins across `test_attempts`, `question_attempts`, auth tables).
 
 ---
@@ -112,6 +113,10 @@ Top-level test metadata.
 | `title` | `varchar(255)` | YES | — | Display title |
 | `is_mock` | `boolean` | NO | — | `true` = timed mock exam |
 | `created_by` | `uuid` | NO | — | FK → `accounts.id` of creator |
+| `difficulty` | `varchar(20)` | NO | `'medium'` | `easy` \| `medium` \| `hard` |
+| `status` | `varchar(20)` | NO | `'published'` | `draft` \| `published` \| `archived` — learners only see `published` |
+| `description` | `text` | YES | — | Short description shown on the test card |
+| `duration_minutes` | `integer` | YES | — | Admin override; null → official IELTS timing (L 30 / R 60 / W 60 / S 14) |
 | `created_at` | `timestamp` | NO | `now()` | |
 
 ---

@@ -5,7 +5,6 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
 /**
  * Proxies:
- *   /api/attempts/*               → submission-service /attempts/*
  *   /api/writing-submissions/*    → submission-service /writing-submissions/*
  *   /api/speaking-submissions/*   → submission-service /speaking-submissions/*
  *   /api/learners/*               → submission-service /learners/*
@@ -20,12 +19,6 @@ export class SubmissionProxyController {
             process.env.SUBMISSION_SERVICE_URL || 'http://localhost:5003';
     }
 
-    @All(['attempts', 'attempts/*'])
-    @ApiOperation({ summary: 'Proxy attempt routes → submission-service :5003' })
-    async proxyAttempts(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
-        await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
-    }
 
     @All(['stats', 'stats/*'])
     @ApiOperation({ summary: 'Proxy stats routes → submission-service :5003' })

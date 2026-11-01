@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { TestServiceModule } from './test-service.module';
 import { SERVICES_PORTS } from '@app/common/constants';
+import { RMQ_QUEUES, rmqUrls } from '@app/common';
 import { ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from '@app/common/filters/http-exception.filter';
 import { TransformInterceptor } from '@app/common/interceptors/transform.interceptor';
@@ -31,7 +32,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -39,8 +40,8 @@ async function bootstrap() {
   app.connectMicroservice<MicroserviceOptions>({
       transport: Transport.RMQ,
       options: {
-          urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672'],
-          queue: 'ielts_messages',
+          urls: rmqUrls(),
+          queue: RMQ_QUEUES.TEST,
           queueOptions: { durable: true },
           noAck: false,
           prefetchCount: 1,

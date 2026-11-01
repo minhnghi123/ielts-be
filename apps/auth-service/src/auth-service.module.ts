@@ -9,6 +9,7 @@ import { Account } from './entities/account.entity';
 import { LearnerProfile } from './entities/learner-profile.entity';
 import { AdminProfile } from './entities/admin-profile.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { requireJwtSecret } from './jwt-secret';
 
 @Module({
   imports: [
@@ -50,7 +51,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'your-secret-key'),
+        secret: config.get<string>('JWT_SECRET') || requireJwtSecret(),
         // Cast to 'any' — ConfigService returns plain string, but @nestjs/jwt
         // internally types expiresIn as the 'ms' library StringValue brand.
         // The value ('24h', '7d', etc.) is valid at runtime.

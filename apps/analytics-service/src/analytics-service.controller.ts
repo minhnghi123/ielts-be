@@ -9,9 +9,17 @@ import {
     HttpCode,
     HttpStatus,
     Logger,
+    UseGuards,
 } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
-import { RMQ_PATTERNS } from '@app/common';
+import {
+    RMQ_PATTERNS,
+    CurrentUser,
+    Roles,
+    RolesGuard,
+    assertOwnerOrPrivileged,
+} from '@app/common';
+import type { RequestUser } from '@app/common';
 import { AnalyticsServiceService } from './analytics-service.service';
 import {
     UpsertBandProfileDto,
@@ -23,6 +31,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @ApiTags('Analytics')
 @ApiBearerAuth()
 @Controller('analytics')
+@UseGuards(RolesGuard)
 export class AnalyticsServiceController {
     private readonly logger = new Logger(AnalyticsServiceController.name);
 
@@ -32,17 +41,20 @@ export class AnalyticsServiceController {
 
     @Get('summary/:learnerId')
     @ApiOperation({ summary: 'Get full dashboard summary for a learner' })
-    getDashboardSummary(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    getDashboardSummary(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.getDashboardSummary(learnerId);
     }
 
     @Get('band-profiles/:learnerId')
     @ApiOperation({ summary: 'Get per-skill band profiles for a learner' })
-    getBandProfiles(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    getBandProfiles(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.getBandProfiles(learnerId);
     }
 
     @Put('band-profiles')
+    @Roles('system', 'admin')
     @ApiOperation({ summary: 'Create or update a band profile for a learner+skill' })
     upsertBandProfile(@Body() dto: UpsertBandProfileDto) {
         return this.service.upsertBandProfile(dto);
@@ -50,11 +62,13 @@ export class AnalyticsServiceController {
 
     @Get('progress/:learnerId')
     @ApiOperation({ summary: 'Get overall band score history for charting' })
-    getProgress(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    getProgress(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.getProgressSnapshots(learnerId);
     }
 
     @Post('progress/snapshot')
+    @Roles('system', 'admin')
     @ApiOperation({ summary: 'Record a new overall band snapshot after test completion' })
     createSnapshot(@Body() dto: CreateSnapshotDto) {
         return this.service.createSnapshot(dto);
@@ -62,11 +76,13 @@ export class AnalyticsServiceController {
 
     @Get('mistakes/:learnerId')
     @ApiOperation({ summary: "Get a learner's mistake history" })
-    getMistakes(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    getMistakes(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.getMistakes(learnerId);
     }
 
     @Post('mistakes')
+    @Roles('system', 'admin')
     @ApiOperation({ summary: 'Record a mistake for a learner on a question' })
     recordMistake(@Body() dto: CreateMistakeDto) {
         return this.service.recordMistake(dto);
@@ -79,11 +95,13 @@ export class AnalyticsServiceController {
     @ApiOperation({
         summary: 'Full analytics sync for one learner — rebuilds band profiles, snapshots, and mistakes from source tables',
     })
-    syncLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    syncLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.fullSyncLearnerAnalytics(learnerId);
     }
 
     @Post('sync-all')
+    @Roles('admin')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Sync analytics for ALL learners who have submitted attempts (admin)',
@@ -95,6 +113,7 @@ export class AnalyticsServiceController {
     // ─── Admin endpoints ──────────────────────────────────────────────────────────
 
     @Get('admin/global-stats')
+    @Roles('admin')
     @ApiOperation({
         summary: 'Platform-wide analytics: total users, attempts per day, band distribution, top learners',
     })

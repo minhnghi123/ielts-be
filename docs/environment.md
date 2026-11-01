@@ -6,6 +6,17 @@ Each NestJS service loads its **own** `.env` file from `apps/<service-name>/.env
 
 ## Per-Service Variable Reference
 
+### api-gateway (`apps/api-gateway/.env`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `JWT_SECRET` | Yes | Same secret as auth-service. The gateway verifies every token itself and forwards identity as `x-user-id`, `x-user-role`, `x-profile-id` headers. Startup fails if missing. |
+| `INTERNAL_API_KEY` | Recommended | Shared secret attached as `x-internal-key` to every forwarded request. When set, downstream services reject requests that lack it, so they cannot be called directly. Trusted server code (Next.js API routes) may also call the gateway with this header to act as role `system` (e.g. `PUT /api/attempts/:id/ai-feedback`). |
+| `AUTH_SERVICE_URL` / `TEST_SERVICE_URL` / `SUBMISSION_SERVICE_URL` / `ANALYTICS_SERVICE_URL` | No | Downstream base URLs (default `http://localhost:500x`) |
+| `CORS_ORIGIN` | No | Comma-separated allowed origins (default `http://localhost:3000`) |
+
+All downstream services additionally read `INTERNAL_API_KEY` (same value as the gateway) and `CORS_ORIGIN`.
+
 ### auth-service (`apps/auth-service/.env`)
 
 | Variable | Required | Description |

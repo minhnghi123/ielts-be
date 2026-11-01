@@ -2,9 +2,10 @@ import { IsUUID, IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSpeakingSubmissionDto {
-    @ApiProperty({ description: 'UUID of the learner_profile' })
+    @ApiPropertyOptional({ description: 'Ignored for learners — derived from the token. Admins may set it.' })
     @IsString()
-    learnerId: string;
+    @IsOptional()
+    learnerId?: string;
 
     @ApiProperty({ description: 'UUID of the speaking_part' })
     @IsString()

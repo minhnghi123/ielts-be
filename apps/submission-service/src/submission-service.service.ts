@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
-import { lastValueFrom } from 'rxjs';
 import { Repository, DataSource } from 'typeorm';
 import { TestAttempt } from './entities/test-attempt.entity';
 import { QuestionAttempt } from './entities/question-attempt.entity';
@@ -9,37 +8,12 @@ import { WritingSubmission } from './entities/writing-submission.entity';
 import { SpeakingSubmission } from './entities/speaking-submission.entity';
 import { WritingScore } from './entities/writing-score.entity';
 import { SpeakingScore } from './entities/speaking-score.entity';
-import { StartAttemptDto } from './dto/start-attempt.dto';
-import { SaveAnswerDto } from './dto/save-answer.dto';
 import { CreateWritingSubmissionDto } from './dto/create-writing-submission.dto';
 import { CreateSpeakingSubmissionDto } from './dto/create-speaking-submission.dto';
 import { CreateWritingGradingDto } from './dto/create-writing-grading.dto';
 import { AiWritingGrading } from './entities/ai-writing-grading.entity';
-import { RMQ_PATTERNS } from '@app/common';
+import { RMQ_CLIENTS, RMQ_PATTERNS } from '@app/common';
 
-// IELTS Raw Score → Band Score mapping for Reading (40 questions)
-const READING_BAND_MAP: Record<number, number> = {
-    40: 9.0, 39: 8.5, 38: 8.5, 37: 8.0, 36: 8.0, 35: 7.5, 34: 7.5,
-    33: 7.0, 32: 7.0, 31: 6.5, 30: 6.5, 29: 6.0, 28: 6.0, 27: 5.5,
-    26: 5.5, 25: 5.0, 24: 5.0, 23: 4.5, 22: 4.5, 21: 4.0, 20: 4.0,
-    19: 3.5, 18: 3.5, 17: 3.0, 16: 3.0, 14: 2.5, 12: 2.0, 10: 1.5,
-};
-
-// IELTS Listening Raw Score → Band Score
-const LISTENING_BAND_MAP: Record<number, number> = {
-    40: 9.0, 39: 9.0, 38: 8.5, 37: 8.5, 36: 8.0, 35: 8.0, 34: 7.5,
-    33: 7.5, 32: 7.0, 31: 7.0, 30: 6.5, 29: 6.5, 28: 6.0, 27: 6.0,
-    26: 5.5, 25: 5.5, 24: 5.0, 23: 5.0, 22: 4.5, 21: 4.5, 18: 4.0,
-    16: 3.5, 15: 3.0, 13: 2.5, 11: 2.0, 9: 1.5,
-};
-
-function rawToBand(raw: number, map: Record<number, number>): number {
-    // Walk downward until we find a floor entry
-    for (let i = raw; i >= 0; i--) {
-        if (map[i] !== undefined) return map[i];
-    }
-    return 1.0;
-}
 
 /**
  * Evaluates whether the user's answer matches the correct answer rule.
@@ -112,124 +86,11 @@ export class SubmissionServiceService {
         @InjectRepository(AiWritingGrading)
         private readonly aiWritingGradingRepo: Repository<AiWritingGrading>,
         private readonly dataSource: DataSource,
-        @Inject('RMQ_SERVICE') private readonly client: ClientProxy,
+        @Inject(RMQ_CLIENTS.SUBMISSION) private readonly client: ClientProxy,
+        @Inject(RMQ_CLIENTS.ANALYTICS) private readonly analyticsClient: ClientProxy,
     ) { }
 
-    // ─── Test Attempts ────────────────────────────────────────────────────────────
-
-    async startAttempt(dto: StartAttemptDto): Promise<TestAttempt> {
-        const attempt = this.attemptRepo.create({
-            learnerId: dto.learnerId,
-            testId: dto.testId,
-            startedAt: new Date(),
-        });
-        return this.attemptRepo.save(attempt);
-    }
-
-    async saveAnswer(attemptId: string, dto: SaveAnswerDto): Promise<QuestionAttempt> {
-        const attempt = await this.attemptRepo.findOne({ where: { id: attemptId } });
-        if (!attempt) throw new NotFoundException(`Attempt #${attemptId} not found`);
-        if (attempt.submittedAt) throw new BadRequestException('Attempt already submitted');
-
-        // Upsert: one row per (testAttemptId, questionId)
-        let qa = await this.questionAttemptRepo.findOne({
-            where: { testAttemptId: attemptId, questionId: dto.questionId },
-        });
-        if (qa) {
-            qa.answer = dto.answer;
-            qa.answeredAt = new Date();
-        } else {
-            qa = this.questionAttemptRepo.create({
-                testAttemptId: attemptId,
-                questionId: dto.questionId,
-                answer: dto.answer,
-                answeredAt: new Date(),
-            });
-        }
-        return this.questionAttemptRepo.save(qa);
-    }
-
-    async submitAttempt(attemptId: string) {
-        const attempt = await this.attemptRepo.findOne({ where: { id: attemptId } });
-        if (!attempt) throw new NotFoundException(`Attempt #${attemptId} not found`);
-        if (attempt.submittedAt) throw new BadRequestException('Already submitted');
-
-        // Fetch all question attempts for this test attempt
-        const questionAttempts = await this.questionAttemptRepo.find({
-            where: { testAttemptId: attemptId },
-        });
-
-        // Fetch correct answers from question_answers via raw query
-        // (submission-service reads this table cross-service against same DB)
-        const questionIds = questionAttempts.map((qa) => qa.questionId);
-        let rawScore = 0;
-
-        if (questionIds.length > 0) {
-            // Fetch correct answers via Message Broker RPC
-            const answers: Array<{ questionId: string; correctAnswers: string[]; caseSensitive: boolean }> =
-                await lastValueFrom(
-                    this.client.send(RMQ_PATTERNS.TEST.GET_ANSWERS, questionIds)
-                );
-
-            const answerMap = new Map(answers.map((a) => [a.questionId, a]));
-
-            for (const qa of questionAttempts) {
-                const correctData = answerMap.get(qa.questionId);
-                if (!correctData || !qa.answer) {
-                    qa.isCorrect = false;
-                } else {
-                    const correct = correctData.correctAnswers.some((ca) => {
-                        return evaluateAnswer(qa.answer!, ca, correctData.caseSensitive);
-                    });
-                    qa.isCorrect = correct;
-                    if (correct) rawScore++;
-                }
-            }
-
-            await this.questionAttemptRepo.save(questionAttempts);
-        }
-
-        // Determine skill to pick the right band map via Message Broker RPC
-        const testData = await lastValueFrom(
-            this.client.send(RMQ_PATTERNS.TEST.GET_SKILL, attempt.testId)
-        );
-        const skill = testData?.skill ?? 'reading';
-        const bandMap = skill === 'listening' ? LISTENING_BAND_MAP : READING_BAND_MAP;
-        const bandScore = rawToBand(rawScore, bandMap);
-
-        attempt.submittedAt = new Date();
-        attempt.rawScore = rawScore;
-        attempt.bandScore = bandScore;
-        const savedAttempt = await this.attemptRepo.save(attempt);
-
-        // Notify Analytics service asynchronously
-        this.client.emit(RMQ_PATTERNS.ANALYTICS.TEST_SUBMITTED, {
-            learnerId: savedAttempt.learnerId,
-            testId: savedAttempt.testId,
-            attemptId: savedAttempt.id,
-            skill,
-            bandScore,
-            submittedAt: savedAttempt.submittedAt,
-        });
-
-        return savedAttempt;
-    }
-
-    async getAttempt(attemptId: string) {
-        const attempt = await this.attemptRepo.findOne({ where: { id: attemptId } });
-        if (!attempt) throw new NotFoundException(`Attempt #${attemptId} not found`);
-        const questionAttempts = await this.questionAttemptRepo.find({
-            where: { testAttemptId: attemptId },
-        });
-        return { ...attempt, questionAttempts };
-    }
-
-    async getAttemptsByLearner(learnerId: string) {
-        return this.attemptRepo.find({
-            where: { learnerId },
-            order: { startedAt: 'DESC' },
-        });
-    }
+    // ─── Global stats (admin dashboard) ──────────────────────────────────────────
 
     async getGlobalStats() {
         const result = await this.dataSource.query(`
@@ -256,7 +117,7 @@ export class SubmissionServiceService {
     // ─── Writing Submissions ──────────────────────────────────────────────────────
 
     async createWritingSubmission(
-        dto: CreateWritingSubmissionDto,
+        dto: CreateWritingSubmissionDto & { learnerId: string },
     ): Promise<WritingSubmission> {
         const sub = this.writingSubRepo.create({
             learnerId: dto.learnerId,
@@ -319,6 +180,16 @@ export class SubmissionServiceService {
                 `UPDATE writing_submissions SET grading_status = 'ai_graded', overall_band = $1 WHERE id = $2`,
                 [dto.overallBand, dto.submissionId],
             );
+            const sub = await this.writingSubRepo.findOne({ where: { id: dto.submissionId } });
+            if (sub) {
+                this.analyticsClient.emit(RMQ_PATTERNS.ANALYTICS.TEST_SUBMITTED, {
+                    learnerId: sub.learnerId,
+                    submissionId: sub.id,
+                    skill: 'writing',
+                    bandScore: dto.overallBand,
+                    submittedAt: sub.submittedAt,
+                });
+            }
         }
 
         return saved;
@@ -337,7 +208,7 @@ export class SubmissionServiceService {
     // ─── Speaking Submissions ─────────────────────────────────────────────────────
 
     async createSpeakingSubmission(
-        dto: CreateSpeakingSubmissionDto,
+        dto: CreateSpeakingSubmissionDto & { learnerId: string },
     ): Promise<SpeakingSubmission> {
         const sub = this.speakingSubRepo.create({
             learnerId: dto.learnerId,
