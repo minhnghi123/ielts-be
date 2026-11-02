@@ -5,7 +5,7 @@ export class WritingScore {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'submission_id' })
+    @Column({ name: 'submission_id', type: 'uuid' })
     submissionId: string;
 
     @Column({ type: 'varchar', length: 50 })

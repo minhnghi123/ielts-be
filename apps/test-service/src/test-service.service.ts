@@ -1240,13 +1240,12 @@ export class TestServiceService {
         ? new Date(attempt.expiresAt).toISOString()
         : null,
     };
-    try {
-      this.classroomEvents.emit(pattern, payload);
-    } catch (err) {
-      this.logger.warn(
-        `Failed to emit ${pattern} for attempt ${attempt.id}: ${String(err)}`,
-      );
-    }
+    this.classroomEvents.emit(pattern, payload).subscribe({
+      error: (err) =>
+        this.logger.warn(
+          `Failed to emit ${pattern} for attempt ${attempt.id}: ${String(err)}`,
+        ),
+    });
   }
 
   /** IELTS bands are reported in 0.5 steps. */
@@ -1391,6 +1390,11 @@ export class TestServiceService {
       this.expandAnswerTemplate(raw, caseSensitive).forEach((a) =>
         acceptable.add(a),
       );
+      const m = String(raw).trim().match(TestServiceService.OPTION_LETTER_RE);
+      if (m) {
+        acceptable.add(this.normaliseInput(m[1], caseSensitive));
+        acceptable.add(this.normaliseInput(m[2], caseSensitive));
+      }
     }
     return acceptable;
   }
@@ -1402,6 +1406,23 @@ export class TestServiceService {
    * - Maps common True/False/Not-Given abbreviations to canonical forms
    *   so "NG", "N/G", "not-given" all match the stored "NOT GIVEN"
    */
+  /**
+   * Multiple-choice answers may arrive either as the bare option letter ("B")
+   * or as the rendered option ("B. Heavy taxation" / "B) Heavy taxation").
+   * Both forms are compared against the key, which may itself use either form.
+   */
+  private static readonly OPTION_LETTER_RE = /^([A-Ha-h])\s*[.):-]\s*(.+)$/;
+
+  private candidateForms(answer: string, caseSensitive: boolean): string[] {
+    const forms = [this.normaliseInput(answer, caseSensitive)];
+    const m = answer.trim().match(TestServiceService.OPTION_LETTER_RE);
+    if (m) {
+      forms.push(this.normaliseInput(m[1], caseSensitive));
+      forms.push(this.normaliseInput(m[2], caseSensitive));
+    }
+    return forms;
+  }
+
   private normaliseInput(answer: string, caseSensitive: boolean): string {
     const trimmed = answer.trim().replace(/\s+/g, ' ');
     const step1 = caseSensitive ? trimmed : trimmed.toLowerCase();
@@ -1503,8 +1524,8 @@ export class TestServiceService {
             key.correctAnswers,
             key.caseSensitive,
           );
-          isCorrect = acceptable.has(
-            this.normaliseInput(trimmed, key.caseSensitive),
+          isCorrect = this.candidateForms(trimmed, key.caseSensitive).some(
+            (form) => acceptable.has(form),
           );
         }
         if (isCorrect) rawScore++;

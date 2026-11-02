@@ -26,7 +26,7 @@ import { AiWritingGrading } from './entities/ai-writing-grading.entity';
                 imports: [ConfigModule],
                 inject: [ConfigService],
                 useFactory: (config: ConfigService) => ({
-                    type: Transport.RMQ,
+                    transport: Transport.RMQ,
                     options: {
                         urls: [config.get<string>('RABBITMQ_URL') || rmqUrls()[0]],
                         queue: name === RMQ_CLIENTS.ANALYTICS ? RMQ_QUEUES.ANALYTICS : RMQ_QUEUES.SUBMISSION,

@@ -7,10 +7,10 @@ export class WritingSubmission {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'learner_id' })
+    @Column({ name: 'learner_id', type: 'uuid' })
     learnerId: string;
 
-    @Column({ name: 'writing_task_id' })
+    @Column({ name: 'writing_task_id', type: 'uuid' })
     writingTaskId: string;
 
     @Column({ type: 'text' })

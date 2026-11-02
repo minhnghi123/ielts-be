@@ -7,10 +7,10 @@ export class SpeakingSubmission {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'learner_id' })
+    @Column({ name: 'learner_id', type: 'uuid' })
     learnerId: string;
 
-    @Column({ name: 'speaking_part_id' })
+    @Column({ name: 'speaking_part_id', type: 'uuid' })
     speakingPartId: string;
 
     @Column({ name: 'audio_url', type: 'text' })

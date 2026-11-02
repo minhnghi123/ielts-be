@@ -1218,8 +1218,9 @@ export class ClassroomServiceService {
     user: RequestUser | null,
   ) {
     const { cls, member, owner } = await this.requireAccess(classId, user);
+    // Learners navigate from an attempt, so accept the attempt id as an alias.
     const s = await this.submissionRepo.findOne({
-      where: { id: submissionId },
+      where: [{ id: submissionId }, { attemptId: submissionId }],
     });
     if (!s) throw new NotFoundException('Submission not found');
     const a = this.decorateAssignment(

@@ -88,7 +88,7 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (config: ConfigService) => ({
-          type: Transport.RMQ,
+          transport: Transport.RMQ,
           options: {
             urls: [config.get<string>('RABBITMQ_URL') || rmqUrls()[0]],
             queue: RMQ_QUEUES.CLASSROOM,
