@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { RequestUser, USER_HEADERS } from '@app/common';
+import { RequestUser, TeacherStatus, USER_HEADERS } from '@app/common';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | '*';
 
@@ -34,6 +34,19 @@ const PUBLIC_ROUTES: RouteRule[] = [
 /** Routes only admins may call. Everything else is available to any signed-in user. */
 const ADMIN_ROUTES: RouteRule[] = [
   rule('*', /^\/api\/auth\/users/),
+  rule('*', /^\/api\/auth\/teachers/),
+  rule('PATCH', /^\/api\/tests\/[^/]+\/visibility$/),
+  rule('*', /^\/api\/analytics\/admin\//),
+  rule('POST', /^\/api\/analytics\/sync-all$/),
+  rule('*', /^\/api\/stats/),
+  rule('*', /^\/api\/teacher\/evaluation/),
+];
+
+/**
+ * Content-authoring routes: admins and (approved) teachers. Ownership of a
+ * teacher's own tests is enforced inside test-service.
+ */
+const AUTHOR_ROUTES: RouteRule[] = [
   rule('POST', /^\/api\/tests/),
   rule(
     'PUT',
@@ -49,9 +62,7 @@ const ADMIN_ROUTES: RouteRule[] = [
   ),
   rule('POST', /^\/api\/(sections|groups)\//),
   rule('GET', /^\/api\/groups\/[^/]+\/questions/),
-  rule('*', /^\/api\/analytics\/admin\//),
-  rule('POST', /^\/api\/analytics\/sync-all$/),
-  rule('*', /^\/api\/stats/),
+  rule('*', /^\/api\/teacher\//),
 ];
 
 /**
@@ -63,6 +74,7 @@ const LEARNER_POST_EXCEPTIONS: RegExp[] = [/^\/api\/tests\/[^/]+\/attempts$/];
 /** Routes trusted server code (Next.js API routes) may call with the internal key. */
 const SYSTEM_ROUTES: RouteRule[] = [
   rule('PUT', /^\/api\/attempts\/[^/]+\/ai-feedback$/),
+  rule('GET', /^\/api\/classes\/[^/]+\/submissions\/[^/]+$/),
   rule('POST', /^\/api\/writing-gradings$/),
   rule('POST', /^\/api\/(writing|speaking)-submissions$/),
   rule('GET', /^\/api\/attempts\/[^/]+$/),
@@ -114,6 +126,20 @@ export class GatewayAuthGuard implements CanActivate {
     if (isAdminRoute && user.role !== 'admin') {
       throw new ForbiddenException('Admin access required');
     }
+
+    const isAuthorRoute =
+      matches(AUTHOR_ROUTES, method, path) &&
+      !(method === 'POST' && LEARNER_POST_EXCEPTIONS.some((p) => p.test(path)));
+    if (isAuthorRoute && user.role !== 'admin') {
+      if (user.role !== 'teacher') {
+        throw new ForbiddenException('Teacher or admin access required');
+      }
+      if (user.teacherStatus && user.teacherStatus !== 'approved') {
+        throw new ForbiddenException(
+          'Your teacher account has not been approved yet',
+        );
+      }
+    }
     return true;
   }
 
@@ -137,13 +163,20 @@ export class GatewayAuthGuard implements CanActivate {
         email?: string;
         role?: string;
         profileId?: string;
+        teacherStatus?: TeacherStatus;
       }>(auth.slice(7));
-      const role = payload.role === 'admin' ? 'admin' : 'learner';
+      const role =
+        payload.role === 'admin'
+          ? 'admin'
+          : payload.role === 'teacher'
+            ? 'teacher'
+            : 'learner';
       return {
         id: payload.sub,
         email: payload.email ?? null,
         role,
         profileId: payload.profileId ?? null,
+        teacherStatus: role === 'teacher' ? (payload.teacherStatus ?? 'pending') : null,
       };
     } catch (err) {
       this.logger.debug(`JWT rejected: ${(err as Error).message}`);

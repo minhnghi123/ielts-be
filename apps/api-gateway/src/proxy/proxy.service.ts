@@ -34,6 +34,7 @@ export class ProxyService {
             if (user.id) headers[USER_HEADERS.USER_ID] = user.id;
             if (user.email) headers[USER_HEADERS.EMAIL] = user.email;
             if (user.profileId) headers[USER_HEADERS.PROFILE_ID] = user.profileId;
+            if (user.teacherStatus) headers[USER_HEADERS.TEACHER_STATUS] = user.teacherStatus;
         }
         if (process.env.INTERNAL_API_KEY) {
             headers[USER_HEADERS.INTERNAL_KEY] = process.env.INTERNAL_API_KEY;

@@ -16,18 +16,22 @@ export const USER_HEADERS = {
   EMAIL: 'x-user-email',
   ROLE: 'x-user-role',
   PROFILE_ID: 'x-profile-id',
+  TEACHER_STATUS: 'x-teacher-status',
   INTERNAL_KEY: 'x-internal-key',
 } as const;
 
-export type UserRole = 'learner' | 'admin' | 'system';
+export type UserRole = 'learner' | 'teacher' | 'admin' | 'system';
+export type TeacherStatus = 'pending' | 'approved' | 'rejected';
 
 export interface RequestUser {
   /** accounts.id */
   id: string | null;
   email: string | null;
   role: UserRole;
-  /** learner_profiles.id or admin_profiles.id */
+  /** learner_profiles.id, teacher_profiles.id or admin_profiles.id */
   profileId: string | null;
+  /** Only present for teachers. */
+  teacherStatus?: TeacherStatus | null;
 }
 
 function header(req: Request, name: string): string | null {
@@ -44,6 +48,7 @@ export function getRequestUser(req: Request): RequestUser | null {
     email: header(req, USER_HEADERS.EMAIL),
     role,
     profileId: header(req, USER_HEADERS.PROFILE_ID),
+    teacherStatus: header(req, USER_HEADERS.TEACHER_STATUS) as TeacherStatus | null,
   };
 }
 
@@ -87,4 +92,20 @@ export function assertOwnerOrPrivileged(
   if (isPrivileged(user)) return;
   if (user?.profileId && user.profileId === ownerLearnerId) return;
   throw new ForbiddenException('You do not have access to this resource');
+}
+
+export function isTeacher(user: RequestUser | null): boolean {
+  return user?.role === 'teacher';
+}
+
+/** Teachers may only manage classes once an admin has approved their account. */
+export function assertApprovedTeacher(user: RequestUser | null): string {
+  if (isPrivileged(user) && user?.profileId) return user.profileId;
+  if (!isTeacher(user) || !user?.profileId) {
+    throw new ForbiddenException('Teacher access required');
+  }
+  if (user.teacherStatus && user.teacherStatus !== 'approved') {
+    throw new ForbiddenException('Your teacher account has not been approved yet');
+  }
+  return user.profileId;
 }
