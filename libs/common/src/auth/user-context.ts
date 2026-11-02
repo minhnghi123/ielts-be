@@ -48,7 +48,10 @@ export function getRequestUser(req: Request): RequestUser | null {
     email: header(req, USER_HEADERS.EMAIL),
     role,
     profileId: header(req, USER_HEADERS.PROFILE_ID),
-    teacherStatus: header(req, USER_HEADERS.TEACHER_STATUS) as TeacherStatus | null,
+    teacherStatus: header(
+      req,
+      USER_HEADERS.TEACHER_STATUS,
+    ) as TeacherStatus | null,
   };
 }
 
@@ -105,7 +108,9 @@ export function assertApprovedTeacher(user: RequestUser | null): string {
     throw new ForbiddenException('Teacher access required');
   }
   if (user.teacherStatus && user.teacherStatus !== 'approved') {
-    throw new ForbiddenException('Your teacher account has not been approved yet');
+    throw new ForbiddenException(
+      'Your teacher account has not been approved yet',
+    );
   }
   return user.profileId;
 }

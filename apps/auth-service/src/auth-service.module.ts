@@ -23,14 +23,19 @@ import { requireJwtSecret } from './jwt-secret';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const username = config.get<string>('DB_USERNAME') || process.env.DB_USERNAME;
+        const username =
+          config.get<string>('DB_USERNAME') || process.env.DB_USERNAME;
         console.log(`[AUTH-DB] Connecting with user: ${username}`);
         return {
           type: 'postgres',
           host: config.get<string>('DB_HOST') || process.env.DB_HOST,
-          port: parseInt(config.get<string>('DB_PORT') || process.env.DB_PORT || '6543', 10),
+          port: parseInt(
+            config.get<string>('DB_PORT') || process.env.DB_PORT || '6543',
+            10,
+          ),
           username,
-          password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
+          password:
+            config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
           database: config.get<string>('DB_NAME') || process.env.DB_NAME,
           ssl: { rejectUnauthorized: false },
           entities: [Account, LearnerProfile, AdminProfile, TeacherProfile],
@@ -46,7 +51,12 @@ import { requireJwtSecret } from './jwt-secret';
         };
       },
     }),
-    TypeOrmModule.forFeature([Account, LearnerProfile, AdminProfile, TeacherProfile]),
+    TypeOrmModule.forFeature([
+      Account,
+      LearnerProfile,
+      AdminProfile,
+      TeacherProfile,
+    ]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -56,11 +66,13 @@ import { requireJwtSecret } from './jwt-secret';
         // Cast to 'any' — ConfigService returns plain string, but @nestjs/jwt
         // internally types expiresIn as the 'ms' library StringValue brand.
         // The value ('24h', '7d', etc.) is valid at runtime.
-        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '24h') as any },
+        signOptions: {
+          expiresIn: config.get<string>('JWT_EXPIRES_IN', '24h') as any,
+        },
       }),
     }),
   ],
   controllers: [AuthServiceController],
   providers: [AuthServiceService, JwtStrategy],
 })
-export class AuthServiceModule { }
+export class AuthServiceModule {}

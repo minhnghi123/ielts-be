@@ -176,7 +176,8 @@ export class GatewayAuthGuard implements CanActivate {
         email: payload.email ?? null,
         role,
         profileId: payload.profileId ?? null,
-        teacherStatus: role === 'teacher' ? (payload.teacherStatus ?? 'pending') : null,
+        teacherStatus:
+          role === 'teacher' ? (payload.teacherStatus ?? 'pending') : null,
       };
     } catch (err) {
       this.logger.debug(`JWT rejected: ${(err as Error).message}`);

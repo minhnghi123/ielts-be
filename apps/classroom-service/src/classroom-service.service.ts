@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, ILike, FindOptionsWhere } from 'typeorm';
+import { In, Repository, FindOptionsWhere } from 'typeorm';
 import {
   assertApprovedTeacher,
   ClassroomAttemptEvent,
@@ -1131,7 +1131,12 @@ export class ClassroomServiceService {
   ): Promise<string> {
     const gb = await this.gradebook(classId, user, skill);
     const esc = (v: unknown) => {
-      const s = v === null || v === undefined ? '' : String(v);
+      const s =
+        v === null || v === undefined
+          ? ''
+          : typeof v === 'object'
+            ? JSON.stringify(v)
+            : String(v as string | number | boolean);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const header = [

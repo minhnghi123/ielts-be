@@ -32,14 +32,19 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const username = config.get<string>('DB_USERNAME') || process.env.DB_USERNAME;
+        const username =
+          config.get<string>('DB_USERNAME') || process.env.DB_USERNAME;
         console.log(`[TEST-DB] Connecting with user: ${username}`);
         return {
           type: 'postgres',
           host: config.get<string>('DB_HOST') || process.env.DB_HOST,
-          port: parseInt(config.get<string>('DB_PORT') || process.env.DB_PORT || '6543', 10),
+          port: parseInt(
+            config.get<string>('DB_PORT') || process.env.DB_PORT || '6543',
+            10,
+          ),
           username,
-          password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
+          password:
+            config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
           database: config.get<string>('DB_NAME') || process.env.DB_NAME,
           ssl: { rejectUnauthorized: false },
           entities: [
@@ -103,4 +108,4 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
     { provide: APP_GUARD, useClass: ContentOwnerGuard },
   ],
 })
-export class TestServiceModule { }
+export class TestServiceModule {}

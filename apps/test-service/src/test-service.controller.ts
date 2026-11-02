@@ -59,8 +59,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 
-const DEFAULT_ADMIN_ID =
-  process.env.ADMIN_PROFILE_ID as string;
+const DEFAULT_ADMIN_ID = process.env.ADMIN_PROFILE_ID as string;
 
 @ApiTags('Tests')
 @ApiBearerAuth()
@@ -70,7 +69,7 @@ export class TestServiceController {
   constructor(
     private readonly testService: TestServiceService,
     private readonly importTestService: ImportTestService,
-  ) { }
+  ) {}
 
   // ─── Import ───────────────────────────────────────────────────────────────────
 
@@ -138,10 +137,14 @@ export class TestServiceController {
   @Get('tests')
   @Public()
   @ApiOperation({
-    summary: 'List tests with filters and pagination (learners only see published tests)',
+    summary:
+      'List tests with filters and pagination (learners only see published tests)',
   })
   @ApiResponse({ status: 200, description: 'Paginated test list' })
-  getTests(@Query() query: QueryTestsDto, @CurrentUser() user: RequestUser | null) {
+  getTests(
+    @Query() query: QueryTestsDto,
+    @CurrentUser() user: RequestUser | null,
+  ) {
     return this.testService.getTests(query, user);
   }
 
@@ -153,15 +156,25 @@ export class TestServiceController {
   })
   @ApiResponse({ status: 200, description: 'Test detail' })
   @ApiResponse({ status: 404, description: 'Test not found' })
-  getTestById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: RequestUser | null) {
-    return this.testService.getTestById(id, { includeAnswers: isPrivileged(user) }, user);
+  getTestById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser | null,
+  ) {
+    return this.testService.getTestById(
+      id,
+      { includeAnswers: isPrivileged(user) },
+      user,
+    );
   }
 
   @Post('tests')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new test' })
   @ApiResponse({ status: 201, description: 'Test created' })
-  createTest(@Body() dto: CreateTestDto, @CurrentUser() user: RequestUser | null) {
+  createTest(
+    @Body() dto: CreateTestDto,
+    @CurrentUser() user: RequestUser | null,
+  ) {
     return this.testService.createTest(dto, user);
   }
 
@@ -172,23 +185,37 @@ export class TestServiceController {
       'Create a new test manually with nested sections, questions, and answers',
   })
   @ApiResponse({ status: 201, description: 'Manual test created successfully' })
-  createManualTest(@Body() dto: CreateManualTestDto, @CurrentUser() user: RequestUser | null) {
+  createManualTest(
+    @Body() dto: CreateManualTestDto,
+    @CurrentUser() user: RequestUser | null,
+  ) {
     return this.testService.createManualTest(dto, user);
   }
 
   @Post('tests/writing')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a full Writing test (Task 1 + Task 2 with rich config)' })
+  @ApiOperation({
+    summary: 'Create a full Writing test (Task 1 + Task 2 with rich config)',
+  })
   @ApiResponse({ status: 201, description: 'Writing test created' })
-  createWritingTest(@Body() dto: CreateWritingTestDto, @CurrentUser() user: RequestUser | null) {
+  createWritingTest(
+    @Body() dto: CreateWritingTestDto,
+    @CurrentUser() user: RequestUser | null,
+  ) {
     return this.testService.createWritingTest(dto, user);
   }
 
   @Post('tests/speaking')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a full Speaking test (Part 1 + Part 2 + Part 3 with rich config)' })
+  @ApiOperation({
+    summary:
+      'Create a full Speaking test (Part 1 + Part 2 + Part 3 with rich config)',
+  })
   @ApiResponse({ status: 201, description: 'Speaking test created' })
-  createSpeakingTest(@Body() dto: CreateSpeakingTestDto, @CurrentUser() user: RequestUser | null) {
+  createSpeakingTest(
+    @Body() dto: CreateSpeakingTestDto,
+    @CurrentUser() user: RequestUser | null,
+  ) {
     return this.testService.createSpeakingTest(dto, user);
   }
 
@@ -228,7 +255,10 @@ export class TestServiceController {
   @Patch('tests/:id/visibility')
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Admin: publish a test to the shared bank (public) or make it private' })
+  @ApiOperation({
+    summary:
+      'Admin: publish a test to the shared bank (public) or make it private',
+  })
   updateVisibility(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('visibility') visibility: 'public' | 'private',
@@ -400,26 +430,41 @@ export class TestServiceController {
 
   @Post('tests/:testId/attempts')
   @Roles('learner', 'admin')
-  @ApiOperation({ summary: 'Start a new attempt (or return the unfinished one) for the current learner' })
+  @ApiOperation({
+    summary:
+      'Start a new attempt (or return the unfinished one) for the current learner',
+  })
   startAttempt(
     @Param('testId', ParseUUIDPipe) testId: string,
     @Body() dto: StartAttemptDto,
     @CurrentUser() user: RequestUser,
     @Body('learnerId') legacyLearnerId?: string,
   ) {
-    return this.testService.startAttempt(testId, resolveLearnerId(user, legacyLearnerId), dto, user);
+    return this.testService.startAttempt(
+      testId,
+      resolveLearnerId(user, legacyLearnerId),
+      dto,
+      user,
+    );
   }
 
   @Get('attempts/active')
   @Roles('learner', 'admin')
-  @ApiOperation({ summary: 'Get the in-progress attempt of the current learner for a test (404 if none)' })
+  @ApiOperation({
+    summary:
+      'Get the in-progress attempt of the current learner for a test (404 if none)',
+  })
   getActiveAttempt(
     @Query('testId', ParseUUIDPipe) testId: string,
     @CurrentUser() user: RequestUser,
     @Query('learnerId') legacyLearnerId?: string,
     @Query('assignmentId') assignmentId?: string,
   ) {
-    return this.testService.getActiveAttempt(testId, resolveLearnerId(user, legacyLearnerId), assignmentId);
+    return this.testService.getActiveAttempt(
+      testId,
+      resolveLearnerId(user, legacyLearnerId),
+      assignmentId,
+    );
   }
 
   @Put('attempts/:attemptId/draft')
@@ -435,7 +480,10 @@ export class TestServiceController {
 
   @Post('attempts/:attemptId/submit')
   @Roles('learner', 'admin')
-  @ApiOperation({ summary: 'Submit answers and complete an attempt (Reading/Listening graded instantly)' })
+  @ApiOperation({
+    summary:
+      'Submit answers and complete an attempt (Reading/Listening graded instantly)',
+  })
   submitAttempt(
     @Param('attemptId', ParseUUIDPipe) attemptId: string,
     @Body() dto: SubmitTestAttemptDto,
@@ -446,7 +494,10 @@ export class TestServiceController {
 
   @Get('attempts/:attemptId')
   @Roles('learner', 'admin', 'system')
-  @ApiOperation({ summary: 'Get an attempt. Correct answers & explanations are included once submitted.' })
+  @ApiOperation({
+    summary:
+      'Get an attempt. Correct answers & explanations are included once submitted.',
+  })
   @ApiResponse({ status: 200, description: 'Attempt details' })
   @ApiResponse({ status: 404, description: 'Attempt not found' })
   getAttemptById(
@@ -458,28 +509,43 @@ export class TestServiceController {
 
   @Get('attempts')
   @Roles('learner', 'admin')
-  @ApiOperation({ summary: 'List attempts of the current learner (admins may pass ?learnerId=)' })
+  @ApiOperation({
+    summary:
+      'List attempts of the current learner (admins may pass ?learnerId=)',
+  })
   getAttemptsByLearnerId(
     @CurrentUser() user: RequestUser,
     @Query('learnerId') learnerId?: string,
     @Query('assignmentId') assignmentId?: string,
   ) {
-    return this.testService.getAttemptsByLearnerId(resolveLearnerId(user, learnerId), assignmentId);
+    return this.testService.getAttemptsByLearnerId(
+      resolveLearnerId(user, learnerId),
+      assignmentId,
+    );
   }
 
   @Get('internal/attempts')
   @Roles('system', 'admin')
-  @ApiOperation({ summary: '[Internal] Attempts of a class assignment (classroom-service gradebook sync)' })
+  @ApiOperation({
+    summary:
+      '[Internal] Attempts of a class assignment (classroom-service gradebook sync)',
+  })
   getAttemptsForAssignment(
     @Query('assignmentId', ParseUUIDPipe) assignmentId: string,
     @Query('learnerId') learnerId?: string,
   ) {
-    return this.testService.getAttemptsForAssignment(assignmentId, learnerId || undefined);
+    return this.testService.getAttemptsForAssignment(
+      assignmentId,
+      learnerId || undefined,
+    );
   }
 
   @Put('attempts/:attemptId/ai-feedback')
   @Roles('system', 'admin')
-  @ApiOperation({ summary: '[Internal] Store AI feedback and band score for a Writing/Speaking attempt' })
+  @ApiOperation({
+    summary:
+      '[Internal] Store AI feedback and band score for a Writing/Speaking attempt',
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   async saveAiFeedback(
     @Param('attemptId', ParseUUIDPipe) attemptId: string,

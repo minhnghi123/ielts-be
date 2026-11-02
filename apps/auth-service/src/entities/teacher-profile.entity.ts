@@ -28,7 +28,12 @@ export class TeacherProfile {
   @Column({ type: 'text', nullable: true })
   bio: string | null;
 
-  @Column({ name: 'approval_status', type: 'varchar', length: 20, default: 'pending' })
+  @Column({
+    name: 'approval_status',
+    type: 'varchar',
+    length: 20,
+    default: 'pending',
+  })
   approvalStatus: TeacherApprovalStatus;
 
   @Column({ name: 'approved_by', type: 'uuid', nullable: true })

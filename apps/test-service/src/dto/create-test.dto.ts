@@ -1,4 +1,13 @@
-import { IsString, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTestDto {
@@ -11,11 +20,17 @@ export class CreateTestDto {
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ example: true, description: 'true = full timed mock, false = practice' })
+  @ApiProperty({
+    example: true,
+    description: 'true = full timed mock, false = practice',
+  })
   @IsBoolean()
   isMock: boolean;
 
-  @ApiPropertyOptional({ description: 'Ignored when a signed-in user is present — the creator is taken from the token' })
+  @ApiPropertyOptional({
+    description:
+      'Ignored when a signed-in user is present — the creator is taken from the token',
+  })
   @IsString()
   @IsOptional()
   createdBy?: string;
@@ -25,7 +40,10 @@ export class CreateTestDto {
   @IsOptional()
   difficulty?: 'easy' | 'medium' | 'hard';
 
-  @ApiPropertyOptional({ enum: ['draft', 'published', 'archived'], default: 'published' })
+  @ApiPropertyOptional({
+    enum: ['draft', 'published', 'archived'],
+    default: 'published',
+  })
   @IsIn(['draft', 'published', 'archived'])
   @IsOptional()
   status?: 'draft' | 'published' | 'archived';
@@ -35,7 +53,10 @@ export class CreateTestDto {
   @IsOptional()
   description?: string;
 
-  @ApiPropertyOptional({ example: 60, description: 'Override official duration (minutes)' })
+  @ApiPropertyOptional({
+    example: 60,
+    description: 'Override official duration (minutes)',
+  })
   @IsInt()
   @Min(1)
   @Max(240)
