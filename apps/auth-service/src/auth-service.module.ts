@@ -8,6 +8,7 @@ import { AuthServiceService } from './auth-service.service';
 import { Account } from './entities/account.entity';
 import { LearnerProfile } from './entities/learner-profile.entity';
 import { AdminProfile } from './entities/admin-profile.entity';
+import { TeacherProfile } from './entities/teacher-profile.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { requireJwtSecret } from './jwt-secret';
 
@@ -32,7 +33,7 @@ import { requireJwtSecret } from './jwt-secret';
           password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
           database: config.get<string>('DB_NAME') || process.env.DB_NAME,
           ssl: { rejectUnauthorized: false },
-          entities: [Account, LearnerProfile, AdminProfile],
+          entities: [Account, LearnerProfile, AdminProfile, TeacherProfile],
           synchronize: false,
           // Connection pool settings for Supabase PgBouncer (transaction mode)
           extra: {
@@ -45,7 +46,7 @@ import { requireJwtSecret } from './jwt-secret';
         };
       },
     }),
-    TypeOrmModule.forFeature([Account, LearnerProfile, AdminProfile]),
+    TypeOrmModule.forFeature([Account, LearnerProfile, AdminProfile, TeacherProfile]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
