@@ -17,6 +17,8 @@ function makeService(): any {
     stub,
     stub,
     stub,
+    stub,
+    stub,
   );
 }
 

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, ValidateNested, IsArray, IsInt, Min, Max, IsObject, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, ValidateNested, IsArray, IsInt, Min, Max, IsObject, IsNumber, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -26,6 +26,11 @@ export class SubmitTestAttemptDto {
 }
 
 export class StartAttemptDto {
+    @ApiPropertyOptional({ description: 'Class assignment this attempt belongs to (classroom-service id)' })
+    @IsUUID()
+    @IsOptional()
+    assignmentId?: string;
+
     @ApiPropertyOptional({
         example: 20,
         description: 'Custom duration (minutes). Only honoured on practice (non-mock) tests.',

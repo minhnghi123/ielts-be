@@ -53,6 +53,13 @@ export class TestAttempt {
     lastSavedAt: Date | null;
 
     /** true when the learner chose a custom (non-official) duration on a practice test */
+    /** Set when the attempt was started from a class assignment (classroom-service). */
+    @Column({ name: 'assignment_id', type: 'uuid', nullable: true })
+    assignmentId: string | null;
+
+    @Column({ name: 'attempt_no', type: 'int', default: 1 })
+    attemptNo: number;
+
     @Column({ name: 'is_practice', default: false })
     isPractice: boolean;
 

@@ -20,6 +20,8 @@ describe('GatewayAuthGuard', () => {
   const guard = new GatewayAuthGuard(jwt);
   const learner = `Bearer ${jwt.sign({ sub: 'u1', role: 'learner', profileId: 'p1' })}`;
   const admin = `Bearer ${jwt.sign({ sub: 'u2', role: 'admin', profileId: 'a1' })}`;
+  const teacher = `Bearer ${jwt.sign({ sub: 'u3', role: 'teacher', profileId: 't1', teacherStatus: 'approved' })}`;
+  const pendingTeacher = `Bearer ${jwt.sign({ sub: 'u4', role: 'teacher', profileId: 't2', teacherStatus: 'pending' })}`;
 
   afterEach(() => delete process.env.INTERNAL_API_KEY);
 
@@ -49,12 +51,12 @@ describe('GatewayAuthGuard', () => {
     ).toBe(true);
     expect(() =>
       guard.canActivate(ctx('POST', '/api/tests', { authorization: learner })),
-    ).toThrow('Admin access required');
+    ).toThrow('Teacher or admin access required');
     expect(() =>
       guard.canActivate(
         ctx('DELETE', '/api/tests/abc', { authorization: learner }),
       ),
-    ).toThrow('Admin access required');
+    ).toThrow('Teacher or admin access required');
     expect(() =>
       guard.canActivate(
         ctx('GET', '/api/auth/users', { authorization: learner }),
@@ -94,5 +96,31 @@ describe('GatewayAuthGuard', () => {
         }),
       ),
     ).toThrow('Authentication required');
+  });
+
+  it('lets approved teachers author tests and manage classes, but not admin routes', () => {
+    expect(guard.canActivate(ctx('POST', '/api/tests', { authorization: teacher }))).toBe(true);
+    expect(guard.canActivate(ctx('POST', '/api/classes', { authorization: teacher }))).toBe(true);
+    expect(guard.canActivate(ctx('GET', '/api/teacher/dashboard', { authorization: teacher }))).toBe(true);
+    expect(() =>
+      guard.canActivate(ctx('GET', '/api/auth/teachers', { authorization: teacher })),
+    ).toThrow('Admin access required');
+    expect(() =>
+      guard.canActivate(ctx('PATCH', '/api/tests/abc/visibility', { authorization: teacher })),
+    ).toThrow('Admin access required');
+  });
+
+  it('blocks pending teachers from authoring until approved', () => {
+    expect(() =>
+      guard.canActivate(ctx('POST', '/api/tests', { authorization: pendingTeacher })),
+    ).toThrow('not been approved');
+    expect(guard.canActivate(ctx('GET', '/api/classes', { authorization: pendingTeacher }))).toBe(true);
+  });
+
+  it('learners may join and read classes but not call teacher routes', () => {
+    expect(guard.canActivate(ctx('POST', '/api/classes/join', { authorization: learner }))).toBe(true);
+    expect(() =>
+      guard.canActivate(ctx('GET', '/api/teacher/dashboard', { authorization: learner })),
+    ).toThrow('Teacher or admin access required');
   });
 });

@@ -26,6 +26,22 @@ export class QueryTestsDto {
   @IsOptional()
   status?: string;
 
+  @ApiPropertyOptional({ description: 'Teachers/admins: only tests I created' })
+  @IsBoolean()
+  @IsOptional()
+  @Type(() => Boolean)
+  mine?: boolean;
+
+  @ApiPropertyOptional({ enum: ['public', 'private'], description: 'Admin only' })
+  @IsIn(['public', 'private'])
+  @IsOptional()
+  visibility?: string;
+
+  @ApiPropertyOptional({ enum: ['admin', 'teacher'], description: 'Admin only' })
+  @IsIn(['admin', 'teacher'])
+  @IsOptional()
+  ownerRole?: string;
+
   @ApiPropertyOptional({ example: 'Cambridge 18' })
   @IsString()
   @MaxLength(120)

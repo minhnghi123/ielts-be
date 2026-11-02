@@ -3,7 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { APP_GUARD } from '@nestjs/core';
-import { RolesGuard } from '@app/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { RolesGuard, RMQ_CLIENTS, RMQ_QUEUES, rmqUrls } from '@app/common';
+import { ClassroomClient } from './classroom/classroom.client';
+import { ContentOwnerGuard } from './classroom/content-owner.guard';
 import { TestServiceController } from './test-service.controller';
 import { TestServiceService } from './test-service.service';
 import { DocxParserService } from './import/docx-parser.service';
@@ -74,13 +77,30 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
       QuestionAttempt,
     ]),
     MulterModule.register({ limits: { fileSize: 50 * 1024 * 1024 } }),
+    ClientsModule.registerAsync([
+      {
+        name: RMQ_CLIENTS.CLASSROOM,
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          type: Transport.RMQ,
+          options: {
+            urls: [config.get<string>('RABBITMQ_URL') || rmqUrls()[0]],
+            queue: RMQ_QUEUES.CLASSROOM,
+            queueOptions: { durable: true },
+          },
+        }),
+      },
+    ]),
   ],
   controllers: [TestServiceController],
   providers: [
     TestServiceService,
     DocxParserService,
     ImportTestService,
+    ClassroomClient,
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: ContentOwnerGuard },
   ],
 })
 export class TestServiceModule { }

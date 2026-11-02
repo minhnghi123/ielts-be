@@ -15,9 +15,10 @@ export class CreateTestDto {
   @IsBoolean()
   isMock: boolean;
 
-  @ApiProperty({ description: 'UUID of the admin who creates the test' })
+  @ApiPropertyOptional({ description: 'Ignored when a signed-in user is present — the creator is taken from the token' })
   @IsString()
-  createdBy: string;
+  @IsOptional()
+  createdBy?: string;
 
   @ApiPropertyOptional({ enum: ['easy', 'medium', 'hard'], default: 'medium' })
   @IsIn(['easy', 'medium', 'hard'])

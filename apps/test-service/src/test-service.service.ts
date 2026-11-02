@@ -4,15 +4,23 @@ import {
     BadRequestException,
     ConflictException,
     Logger,
+    ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, DataSource, ILike } from 'typeorm';
+import { Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
+import { ClassroomClient } from './classroom/classroom.client';
+import { Repository, FindOptionsWhere, DataSource, ILike, IsNull } from 'typeorm';
 import { Test, SKILL_DEFAULT_DURATION_MINUTES } from './entities/test.entity';
 import {
     RequestUser,
     USER_HEADERS,
     assertOwnerOrPrivileged,
     isPrivileged,
+    RMQ_CLIENTS,
+    RMQ_PATTERNS,
+    ClassroomAttemptEvent,
+    isTeacher,
 } from '@app/common';
 import { Section } from './entities/section.entity';
 import { QuestionGroup } from './entities/question-group.entity';
@@ -58,20 +66,37 @@ export class TestServiceService {
         @InjectRepository(QuestionAttempt)
         private readonly questionAttemptRepo: Repository<QuestionAttempt>,
         private readonly dataSource: DataSource,
+        private readonly classroomClient: ClassroomClient,
+        @Inject(RMQ_CLIENTS.CLASSROOM) private readonly classroomEvents: ClientProxy,
     ) { }
 
     // ─── Tests ───────────────────────────────────────────────────────────────────
 
-    async getTests(query: QueryTestsDto, includeUnpublished = false) {
-        const { skill, isMock, difficulty, status, search, page, limit } = query;
+    async getTests(query: QueryTestsDto, user: RequestUser | null = null) {
+        const { skill, isMock, difficulty, status, search, page, limit, mine, visibility, ownerRole } = query;
         const where: FindOptionsWhere<Test> = {};
         if (skill) where.skill = skill as any;
         if (isMock !== undefined) where.isMock = isMock;
         if (difficulty) where.difficulty = difficulty as any;
         if (search) where.title = ILike(`%${search}%`);
-        // Learners only ever see published tests; admins may filter by any status.
-        where.status = includeUnpublished ? ((status as any) ?? undefined) : 'published';
-        if (where.status === undefined) delete where.status;
+
+        const privileged = isPrivileged(user);
+        const teacher = isTeacher(user) && !!user?.id;
+        if (privileged) {
+            // Admins see everything and may filter freely.
+            if (status) where.status = status as any;
+            if (visibility) where.visibility = visibility as any;
+            if (ownerRole) where.ownerRole = ownerRole as any;
+            if (mine && user?.id) where.createdBy = user.id;
+        } else if (teacher && mine) {
+            // A teacher's own bank: every status, private or public.
+            where.createdBy = user!.id as string;
+            if (status) where.status = status as any;
+        } else {
+            // Learners, guests and teachers browsing the shared bank.
+            where.status = 'published';
+            where.visibility = 'public';
+        }
 
         const [data, total] = await this.testRepo.findAndCount({
             where,
@@ -89,15 +114,77 @@ export class TestServiceService {
         };
     }
 
+    /** Lightweight metadata used by ownership/visibility checks. */
+    async findTestMeta(id: string): Promise<Pick<Test, 'id' | 'skill' | 'status' | 'visibility' | 'createdBy' | 'ownerRole'> | null> {
+        return this.testRepo.findOne({
+            where: { id },
+            select: ['id', 'skill', 'status', 'visibility', 'createdBy', 'ownerRole'],
+        });
+    }
+
+    async testIdOfSection(sectionId: string): Promise<string | null> {
+        const s = await this.sectionRepo.findOne({ where: { id: sectionId }, select: ['id', 'testId'] });
+        return s?.testId ?? null;
+    }
+
+    async testIdOfGroup(groupId: string): Promise<string | null> {
+        const g = await this.questionGroupRepo.findOne({ where: { id: groupId }, select: ['id', 'sectionId'] });
+        return g ? this.testIdOfSection(g.sectionId) : null;
+    }
+
+    async testIdOfQuestion(questionId: string): Promise<string | null> {
+        const q = await this.questionRepo.findOne({ where: { id: questionId }, select: ['id', 'questionGroupId'] });
+        return q ? this.testIdOfGroup(q.questionGroupId) : null;
+    }
+
+    /**
+     * Private tests are only visible to admins, their author, and learners who
+     * have been assigned them in a class.
+     */
+    private async assertCanViewTest(
+        meta: Pick<Test, 'id' | 'visibility' | 'createdBy'>,
+        user: RequestUser | null,
+    ): Promise<void> {
+        if (meta.visibility !== 'private') return;
+        if (isPrivileged(user)) return;
+        if (isTeacher(user) && user?.id === meta.createdBy) return;
+        if (user?.role === 'learner' && user.profileId) {
+            if (await this.classroomClient.canAccessTest(user.profileId, meta.id)) return;
+        }
+        throw new NotFoundException(`Test #${meta.id} not found`);
+    }
+
+    /** Stamp authorship from the verified identity; teachers always author private tests. */
+    private stampOwnership<T extends { createdBy?: string }>(dto: T, user: RequestUser | null): T & {
+        createdBy: string;
+        ownerRole: 'admin' | 'teacher';
+        visibility: 'public' | 'private';
+    } {
+        const teacher = isTeacher(user);
+        const createdBy = user?.id ?? dto.createdBy;
+        if (!createdBy) throw new ForbiddenException('Missing creator identity');
+        return Object.assign(dto, {
+            createdBy,
+            ownerRole: (teacher ? 'teacher' : 'admin') as 'admin' | 'teacher',
+            visibility: (teacher ? 'private' : 'public') as 'public' | 'private',
+        });
+    }
+
     /** Official duration unless the admin overrode it on the test. */
     resolveDurationMinutes(test: Pick<Test, 'skill' | 'durationMinutes'>): number {
         return test.durationMinutes ?? SKILL_DEFAULT_DURATION_MINUTES[test.skill] ?? 60;
     }
 
-    async getTestById(id: string, opts: { includeAnswers?: boolean } = {}): Promise<Test> {
-        // Step 1: fetch the test's skill first (lightweight)
-        const meta = await this.testRepo.findOne({ where: { id }, select: ['id', 'skill'] });
+    async getTestById(
+        id: string,
+        opts: { includeAnswers?: boolean } = {},
+        user: RequestUser | null = null,
+    ): Promise<Test> {
+        // Step 1: fetch the test's metadata first (lightweight) and check visibility
+        const meta = await this.findTestMeta(id);
         if (!meta) throw new NotFoundException(`Test #${id} not found`);
+        await this.assertCanViewTest(meta, user);
+        if (isTeacher(user) && user?.id === meta.createdBy) opts = { ...opts, includeAnswers: true };
 
         // Step 2: load only the relations relevant to this skill
         const relations: string[] = [];
@@ -141,17 +228,25 @@ export class TestServiceService {
         return test;
     }
 
-    async createTest(dto: CreateTestDto): Promise<Test> {
+    async createTest(dto: CreateTestDto, user: RequestUser | null = null): Promise<Test> {
+        const owned = this.stampOwnership(dto, user);
         const test = this.testRepo.create({
             skill: dto.skill as any,
             title: dto.title,
             isMock: dto.isMock,
-            createdBy: dto.createdBy,
+            createdBy: owned.createdBy,
+            ownerRole: owned.ownerRole,
+            visibility: owned.visibility,
+            ...(dto.difficulty && { difficulty: dto.difficulty }),
+            ...(dto.status && { status: dto.status }),
+            ...(dto.description !== undefined && { description: dto.description }),
+            ...(dto.durationMinutes !== undefined && { durationMinutes: dto.durationMinutes }),
         });
         return this.testRepo.save(test);
     }
 
-    async createManualTest(dto: CreateManualTestDto): Promise<Test> {
+    async createManualTest(dto: CreateManualTestDto, user: RequestUser | null = null): Promise<Test> {
+        this.stampOwnership(dto as any, user);
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
@@ -162,7 +257,9 @@ export class TestServiceService {
                 skill: dto.skill,
                 title: dto.title,
                 isMock: dto.isMock,
-                createdBy: dto.createdBy,
+                createdBy: dto.createdBy as string,
+                ownerRole: (dto as any).ownerRole ?? 'admin',
+                visibility: (dto as any).visibility ?? 'public',
             });
             const savedTest = await queryRunner.manager.save(Test, test);
 
@@ -249,18 +346,41 @@ export class TestServiceService {
         }
     }
 
-    async updateTest(id: string, dto: Partial<CreateTestDto>): Promise<Test> {
+    async updateTest(id: string, dto: Partial<CreateTestDto>, user: RequestUser | null = null): Promise<Test> {
+        const existing = await this.findTestMeta(id);
+        if (!existing) throw new NotFoundException(`Test #${id} not found`);
+        if (dto.skill && dto.skill !== existing.skill && (await this.classroomClient.countAssignments(id)) > 0) {
+            throw new ConflictException('Cannot change the skill of a test that is assigned to a class');
+        }
         await this.testRepo.update(id, {
             ...(dto.skill && { skill: dto.skill as any }),
             ...(dto.title && { title: dto.title }),
             ...(dto.isMock !== undefined && { isMock: dto.isMock }),
+            ...(dto.difficulty && { difficulty: dto.difficulty }),
+            ...(dto.status && { status: dto.status }),
+            ...(dto.description !== undefined && { description: dto.description }),
+            ...(dto.durationMinutes !== undefined && { durationMinutes: dto.durationMinutes }),
         });
-        return this.getTestById(id);
+        return this.getTestById(id, { includeAnswers: true }, user);
+    }
+
+    /** Admin only: move a test between the shared bank and private. */
+    async updateVisibility(id: string, visibility: 'public' | 'private'): Promise<Test> {
+        const existing = await this.findTestMeta(id);
+        if (!existing) throw new NotFoundException(`Test #${id} not found`);
+        await this.testRepo.update(id, { visibility });
+        return this.getTestById(id, { includeAnswers: true });
     }
 
     async deleteTest(id: string): Promise<void> {
         const test = await this.testRepo.findOne({ where: { id } });
         if (!test) throw new NotFoundException(`Test #${id} not found`);
+        const assigned = await this.classroomClient.countAssignments(id);
+        if (assigned > 0) {
+            throw new ConflictException(
+                `This test is used by ${assigned} class assignment(s). Archive it instead of deleting.`,
+            );
+        }
         await this.testRepo.remove(test);
     }
 
@@ -460,7 +580,8 @@ export class TestServiceService {
 
     // ─── Writing Test (Full Creation & Update) ─────────────────────────────────────────
 
-    async createWritingTest(dto: CreateWritingTestDto): Promise<Test> {
+    async createWritingTest(dto: CreateWritingTestDto, user: RequestUser | null = null): Promise<Test> {
+        this.stampOwnership(dto as any, user);
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
@@ -469,7 +590,9 @@ export class TestServiceService {
                 skill: 'writing' as any,
                 title: dto.title,
                 isMock: dto.isMock,
-                createdBy: dto.createdBy,
+                createdBy: dto.createdBy as string,
+                ownerRole: (dto as any).ownerRole ?? 'admin',
+                visibility: (dto as any).visibility ?? 'public',
             });
             const savedTest = await queryRunner.manager.save(Test, test);
 
@@ -543,7 +666,8 @@ export class TestServiceService {
 
     // ─── Speaking Test (Full Creation & Update) ────────────────────────────────────────
 
-    async createSpeakingTest(dto: CreateSpeakingTestDto): Promise<Test> {
+    async createSpeakingTest(dto: CreateSpeakingTestDto, user: RequestUser | null = null): Promise<Test> {
+        this.stampOwnership(dto as any, user);
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
@@ -552,7 +676,9 @@ export class TestServiceService {
                 skill: 'speaking' as any,
                 title: dto.title,
                 isMock: dto.isMock,
-                createdBy: dto.createdBy,
+                createdBy: dto.createdBy as string,
+                ownerRole: (dto as any).ownerRole ?? 'admin',
+                visibility: (dto as any).visibility ?? 'public',
             });
             const savedTest = await queryRunner.manager.save(Test, test);
 
@@ -657,39 +783,80 @@ export class TestServiceService {
     /** Seconds of tolerance for network latency before a late submission counts as expired. */
     private static readonly SUBMIT_GRACE_SECONDS = 30;
 
-    async startAttempt(testId: string, learnerId: string, dto: StartAttemptDto = {}): Promise<TestAttempt> {
+    async startAttempt(
+        testId: string,
+        learnerId: string,
+        dto: StartAttemptDto = {},
+        user: RequestUser | null = null,
+    ): Promise<TestAttempt> {
         const test = await this.testRepo.findOne({ where: { id: testId } });
         if (!test) throw new NotFoundException(`Test #${testId} not found`);
         if (test.status !== 'published') {
             throw new BadRequestException('This test is not available');
         }
 
-        // One live attempt per learner per test — resume instead of duplicating.
-        const open = await this.findOpenAttempt(testId, learnerId);
+        // Class assignment context: the classroom-service decides whether this
+        // learner may start (membership, time window, attempt limit).
+        let eligibility: Awaited<ReturnType<ClassroomClient['getEligibility']>> | null = null;
+        if (dto.assignmentId) {
+            eligibility = await this.classroomClient.getEligibility(dto.assignmentId, learnerId);
+            if (eligibility.testId !== testId) {
+                throw new BadRequestException('This assignment is for a different test');
+            }
+            const open = await this.findOpenAttempt(testId, learnerId, dto.assignmentId);
+            if (open) return this.decorateAttempt(open);
+            if (!eligibility.allowed) {
+                throw new ConflictException(eligibility.reason || 'You cannot start this assignment now');
+            }
+        } else if (test.visibility === 'private' && !isPrivileged(user)) {
+            if (!(await this.classroomClient.canAccessTest(learnerId, testId))) {
+                throw new NotFoundException(`Test #${testId} not found`);
+            }
+        }
+
+        // One live attempt per learner per test (per assignment) — resume instead of duplicating.
+        const open = await this.findOpenAttempt(testId, learnerId, dto.assignmentId ?? null);
         if (open) return this.decorateAttempt(open);
 
         const officialMinutes = this.resolveDurationMinutes(test);
-        const isPractice = !test.isMock && dto.durationMinutes !== undefined && dto.durationMinutes !== officialMinutes;
+        const practiceAllowed = eligibility ? eligibility.mode === 'practice' : !test.isMock;
+        const isPractice = practiceAllowed && dto.durationMinutes !== undefined && dto.durationMinutes !== officialMinutes;
         const minutes = isPractice ? (dto.durationMinutes as number) : officialMinutes;
-        const durationSeconds = minutes * 60;
+        const durationSeconds = minutes * 60 + (eligibility?.extraSeconds ?? 0);
         const now = new Date();
+        let expiresAt = new Date(now.getTime() + durationSeconds * 1000);
+        if (eligibility?.closeAt) {
+            const closeAt = new Date(eligibility.closeAt);
+            if (closeAt.getTime() <= now.getTime() + 60_000) {
+                throw new ConflictException('This assignment closes in less than a minute');
+            }
+            if (closeAt < expiresAt) expiresAt = closeAt;
+        }
 
         const attempt = this.attemptRepo.create({
             testId: test.id,
             learnerId,
             status: 'in_progress',
-            durationSeconds,
-            expiresAt: new Date(now.getTime() + durationSeconds * 1000),
+            durationSeconds: Math.floor((expiresAt.getTime() - now.getTime()) / 1000),
+            expiresAt,
             draftAnswers: {},
-            isPractice,
+            isPractice: eligibility ? eligibility.mode === 'practice' : isPractice,
+            assignmentId: dto.assignmentId ?? null,
+            attemptNo: eligibility ? eligibility.attemptsUsed + 1 : 1,
         });
         const saved = await this.attemptRepo.save(attempt);
         return this.decorateAttempt(saved);
     }
 
-    private async findOpenAttempt(testId: string, learnerId: string): Promise<TestAttempt | null> {
+    private async findOpenAttempt(
+        testId: string,
+        learnerId: string,
+        assignmentId: string | null | undefined = undefined,
+    ): Promise<TestAttempt | null> {
+        const where: FindOptionsWhere<TestAttempt> = { testId, learnerId, status: 'in_progress' };
+        if (assignmentId !== undefined) where.assignmentId = assignmentId === null ? IsNull() : assignmentId;
         const open = await this.attemptRepo.findOne({
-            where: { testId, learnerId, status: 'in_progress' },
+            where,
             order: { startedAt: 'DESC' },
         });
         if (!open) return null;
@@ -700,8 +867,8 @@ export class TestServiceService {
         return open;
     }
 
-    async getActiveAttempt(testId: string, learnerId: string): Promise<TestAttempt> {
-        const open = await this.findOpenAttempt(testId, learnerId);
+    async getActiveAttempt(testId: string, learnerId: string, assignmentId?: string): Promise<TestAttempt> {
+        const open = await this.findOpenAttempt(testId, learnerId, assignmentId ?? undefined);
         if (!open) throw new NotFoundException('No attempt in progress for this test');
         return this.decorateAttempt(open);
     }
@@ -789,9 +956,25 @@ export class TestServiceService {
         return this.decorateAttempt(attempt);
     }
 
-    async getAttemptsByLearnerId(learnerId: string): Promise<TestAttempt[]> {
+    /** Internal (classroom-service): every attempt of an assignment, optionally for one learner. */
+    async getAttemptsForAssignment(assignmentId: string, learnerId?: string): Promise<TestAttempt[]> {
+        const where: FindOptionsWhere<TestAttempt> = { assignmentId };
+        if (learnerId) where.learnerId = learnerId;
+        const rows = await this.attemptRepo.find({ where, relations: ['test'], order: { startedAt: 'DESC' } });
+        const result: TestAttempt[] = [];
+        for (const a of rows) {
+            if (a.status === 'in_progress' && this.isPastDeadline(a, TestServiceService.SUBMIT_GRACE_SECONDS)) {
+                result.push(await this.finalizeExpired(a));
+            } else {
+                result.push(this.decorateAttempt(a));
+            }
+        }
+        return result;
+    }
+
+    async getAttemptsByLearnerId(learnerId: string, assignmentId?: string): Promise<TestAttempt[]> {
         return this.attemptRepo.find({
-            where: { learnerId },
+            where: assignmentId ? { learnerId, assignmentId } : { learnerId },
             relations: ['test'],
             order: { startedAt: 'DESC' },
         });
@@ -821,6 +1004,31 @@ export class TestServiceService {
         if (dto.bandScore !== undefined) {
             const updated = await this.getAttemptById(attemptId);
             await this.syncAnalyticsAfterSubmit(updated, []);
+            this.emitClassroomEvent(RMQ_PATTERNS.CLASSROOM.ATTEMPT_GRADED, updated);
+        }
+    }
+
+    /** Notify classroom-service about attempts that belong to a class assignment. */
+    private emitClassroomEvent(pattern: string, attempt: TestAttempt): void {
+        if (!attempt.assignmentId) return;
+        const payload: ClassroomAttemptEvent = {
+            attemptId: attempt.id,
+            assignmentId: attempt.assignmentId,
+            learnerId: attempt.learnerId,
+            testId: attempt.testId,
+            skill: attempt.test?.skill ?? null,
+            status: attempt.status,
+            attemptNo: attempt.attemptNo ?? 1,
+            rawScore: attempt.rawScore ?? null,
+            bandScore: attempt.bandScore !== null && attempt.bandScore !== undefined ? Number(attempt.bandScore) : null,
+            startedAt: attempt.startedAt ? new Date(attempt.startedAt).toISOString() : new Date().toISOString(),
+            submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt).toISOString() : null,
+            expiresAt: attempt.expiresAt ? new Date(attempt.expiresAt).toISOString() : null,
+        };
+        try {
+            this.classroomEvents.emit(pattern, payload);
+        } catch (err) {
+            this.logger.warn(`Failed to emit ${pattern} for attempt ${attempt.id}: ${String(err)}`);
         }
     }
 
@@ -1081,6 +1289,7 @@ export class TestServiceService {
 
         const submitted = await this.getAttemptById(attempt.id);
         await this.syncAnalyticsAfterSubmit(submitted, [...new Set(wrongQuestionIds)]);
+        this.emitClassroomEvent(RMQ_PATTERNS.CLASSROOM.ATTEMPT_SUBMITTED, submitted);
         return this.decorateAttempt(submitted);
     }
 
