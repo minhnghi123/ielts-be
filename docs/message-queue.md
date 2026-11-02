@@ -9,7 +9,7 @@ RabbitMQ is provisioned and packages are installed. Inter-service messaging is *
 | Setting | Value |
 |---|---|
 | AMQP URL | `amqp://guest:guest@localhost:5672` (or `rabbitmq:5672` in Docker) |
-| Queue names | `ielts.test`, `ielts.submission`, `ielts.analytics` — one per consuming service (`RMQ_QUEUES` in `libs/common/src/events/rmq-patterns.ts`). A shared queue would round-robin messages to services without a matching handler. |
+| Queue names | `ielts.test`, `ielts.submission`, `ielts.analytics`, `ielts.classroom` — one per consuming service (`RMQ_QUEUES` in `libs/common/src/events/rmq-patterns.ts`). A shared queue would round-robin messages to services without a matching handler. |
 | Queue type | Durable |
 | Transport | `Transport.RMQ` (NestJS `@nestjs/microservices`) |
 
@@ -211,3 +211,14 @@ async handleTestSubmitted(data: TestSubmittedEvent) {
 3. Publisher: inject `ClientProxy` and call `client.emit(RMQ_PATTERNS.X.Y, payload)` (event) or `client.send(...)` (RPC)
 4. Consumer: add `@EventPattern(RMQ_PATTERNS.X.Y)` or `@MessagePattern(...)` handler to the target service's controller
 5. Register `ClientsModule.registerAsync([{ name: 'IELTS_SERVICE', ... }])` in the publisher's module
+
+## Classroom events (test-service → classroom-service)
+
+| Pattern | Emitted when | Payload (`ClassroomAttemptEvent`) |
+|---|---|---|
+| `classroom.attempt.submitted` | an attempt with `assignment_id` is submitted or auto-expired | `attemptId, assignmentId, learnerId, testId, skill, status, attemptNo, rawScore, bandScore, startedAt, submittedAt, expiresAt` |
+| `classroom.attempt.graded` | the AI band of a Writing/Speaking attempt is stored (`PUT /attempts/:id/ai-feedback`) | same shape, `bandScore` filled |
+
+classroom-service upserts `assignment_submissions` keyed by `attempt_id` (idempotent). Poison messages are
+nacked without requeue; teachers can call `POST /classes/:id/assignments/:aid/sync` to rebuild from
+`GET /internal/attempts?assignmentId=` on test-service.
