@@ -1550,19 +1550,29 @@ export class TestServiceService {
     }
 
     if (isAutoGraded) {
+      // Band tables assume the full 40-question paper; scale shorter practice sets.
+      const totalQuestions = keyById.size;
+      const scaledRaw =
+        totalQuestions > 0 && totalQuestions !== 40
+          ? Math.round((rawScore * 40) / totalQuestions)
+          : rawScore;
       bandScore =
         skill === 'listening'
-          ? this.calculateListeningBand(rawScore)
-          : this.calculateReadingBand(rawScore);
+          ? this.calculateListeningBand(scaledRaw)
+          : this.calculateReadingBand(scaledRaw);
     }
 
     const updatePayload: Partial<TestAttempt> = {
       submittedAt: new Date(),
       status: finalStatus,
       rawScore: isAutoGraded ? rawScore : attempt.rawScore,
-      draftAnswers: Object.fromEntries(
-        answers.map((a) => [a.questionId, a.answer ?? '']),
-      ),
+      // Keep autosaved non-question answers (e.g. Writing task texts) alongside the final answers.
+      draftAnswers: {
+        ...(attempt.draftAnswers ?? {}),
+        ...Object.fromEntries(
+          answers.map((a) => [a.questionId, a.answer ?? '']),
+        ),
+      },
     };
     if (bandScore !== null) updatePayload.bandScore = bandScore;
     await this.attemptRepo.update(attempt.id, updatePayload);
