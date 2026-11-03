@@ -3,3 +3,4 @@ export * from './common.service';
 export * from './events/rmq-patterns';
 export * from './auth';
 export * from './constants';
+export * from './learning/error-cause';

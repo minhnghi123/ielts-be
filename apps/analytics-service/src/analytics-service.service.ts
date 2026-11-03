@@ -11,8 +11,15 @@ import {
     CreateMistakeDto,
 } from './dto/analytics.dto';
 import { UpsertLearnerGoalsDto } from './dto/learner-goals.dto';
-import { BadRequestException } from '@nestjs/common';
-import { normalizeQuestionType } from '@app/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { classifyErrorCause, normalizeQuestionType } from '@app/common';
+import type { ErrorCause } from '@app/common';
+import { QuestionExplanation } from './entities/question-explanation.entity';
+import { UpsertExplanationDto } from './dto/analytics.dto';
+import type { MistakeStatus } from './entities/learner-mistake.entity';
+
+export const normalizeAnswerKey = (s: string | null | undefined) =>
+    (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
 export const GOAL_SKILLS = ['listening', 'reading', 'writing', 'speaking'] as const;
 export type GoalSkill = (typeof GOAL_SKILLS)[number];
@@ -79,8 +86,84 @@ export class AnalyticsServiceService {
         private readonly snapshotRepo: Repository<LearnerProgressSnapshot>,
         @InjectRepository(LearnerGoal)
         private readonly goalRepo: Repository<LearnerGoal>,
+        @InjectRepository(QuestionExplanation)
+        private readonly explanationRepo: Repository<QuestionExplanation>,
         private readonly dataSource: DataSource,
     ) { }
+
+    // ─── Mistake notebook ─────────────────────────────────────────────────────────
+
+    async listMistakes(
+        learnerId: string,
+        filters: { status?: string; skill?: string; questionType?: string; attemptId?: string; dueOnly?: boolean } = {},
+    ): Promise<LearnerMistake[]> {
+        const qb = this.mistakeRepo.createQueryBuilder('m').where('m.learner_id = :learnerId', { learnerId });
+        if (filters.status) qb.andWhere('m.status = :status', { status: filters.status });
+        if (filters.skill) qb.andWhere('m.skill = :skill', { skill: filters.skill });
+        if (filters.questionType) {
+            const qt = normalizeQuestionType(filters.questionType) ?? filters.questionType;
+            qb.andWhere('(m.question_type = :qt OR m.mistake_type = :qt)', { qt });
+        }
+        if (filters.attemptId) qb.andWhere('m.attempt_id = :attemptId', { attemptId: filters.attemptId });
+        if (filters.dueOnly) qb.andWhere("m.status <> 'fixed' AND (m.next_review_at IS NULL OR m.next_review_at <= now())");
+        return qb.orderBy('m.created_at', 'DESC').limit(500).getMany();
+    }
+
+    async updateMistakeStatus(id: string, learnerId: string, status: MistakeStatus): Promise<LearnerMistake> {
+        const m = await this.mistakeRepo.findOne({ where: { id } });
+        if (!m) throw new NotFoundException('Mistake not found');
+        if (m.learnerId !== learnerId) throw new ForbiddenException('Not your mistake');
+        m.status = status;
+        m.updatedAt = new Date();
+        if (status === 'fixed') m.lastReviewedAt = new Date();
+        return this.mistakeRepo.save(m);
+    }
+
+    /** Counts per error cause / question type, optionally for one attempt — feeds "mẫu hình lỗi". */
+    async mistakeSummary(learnerId: string, attemptId?: string) {
+        const params: unknown[] = [learnerId];
+        let where = 'learner_id = $1';
+        if (attemptId) { params.push(attemptId); where += ' AND attempt_id = $2'; }
+        const [byCause, byType, statusRows] = await Promise.all([
+            this.mistakeRepo.query(`SELECT COALESCE(error_cause,'unknown') AS k, COUNT(*)::int AS n FROM learner_mistakes WHERE ${where} GROUP BY 1 ORDER BY n DESC`, params),
+            this.mistakeRepo.query(`SELECT COALESCE(question_type, mistake_type, 'unknown') AS k, COUNT(*)::int AS n FROM learner_mistakes WHERE ${where} GROUP BY 1 ORDER BY n DESC`, params),
+            this.mistakeRepo.query(`SELECT status AS k, COUNT(*)::int AS n FROM learner_mistakes WHERE ${where} GROUP BY 1`, params),
+        ]);
+        const toRec = (rows: Array<{ k: string; n: number }>) => Object.fromEntries(rows.map((r) => [r.k, Number(r.n)]));
+        const total = byCause.reduce((a: number, r: { n: number }) => a + Number(r.n), 0);
+        return { total, byCause: toRec(byCause), byQuestionType: toRec(byType), byStatus: toRec(statusRows) };
+    }
+
+    // ─── Explanation cache ────────────────────────────────────────────────────────
+
+    async findExplanation(questionId: string, userAnswer: string | null | undefined): Promise<QuestionExplanation | null> {
+        const key = normalizeAnswerKey(userAnswer);
+        const specific = await this.explanationRepo.findOne({ where: { questionId, userAnswerNorm: key } });
+        if (specific || key === '') return specific;
+        return this.explanationRepo.findOne({ where: { questionId, userAnswerNorm: '' } });
+    }
+
+    async upsertExplanation(dto: UpsertExplanationDto): Promise<QuestionExplanation> {
+        const key = normalizeAnswerKey(dto.userAnswer);
+        const existing = await this.explanationRepo.findOne({ where: { questionId: dto.questionId, userAnswerNorm: key } });
+        // Teacher/author text always wins over AI; AI never overwrites a human-written row.
+        if (existing && existing.source !== 'ai' && (dto.source ?? 'ai') === 'ai') return existing;
+        const row = existing ?? this.explanationRepo.create({ questionId: dto.questionId, userAnswerNorm: key });
+        row.errorCause = (dto.errorCause ?? null) as ErrorCause | null;
+        row.evidenceQuote = dto.evidenceQuote?.trim() || null;
+        row.explanationVi = dto.explanationVi.trim();
+        row.tipVi = dto.tipVi?.trim() || null;
+        row.model = dto.model ?? null;
+        row.source = dto.source ?? 'ai';
+        return this.explanationRepo.save(row);
+    }
+
+    async voteExplanation(id: string, helpful: boolean): Promise<QuestionExplanation> {
+        const row = await this.explanationRepo.findOne({ where: { id } });
+        if (!row) throw new NotFoundException('Explanation not found');
+        if (helpful) row.helpfulVotes += 1; else row.unhelpfulVotes += 1;
+        return this.explanationRepo.save(row);
+    }
 
     // ─── Learner Goals ────────────────────────────────────────────────────────────
 
@@ -231,12 +314,34 @@ export class AnalyticsServiceService {
     }
 
     async recordMistake(dto: CreateMistakeDto): Promise<LearnerMistake> {
-        const mistake = this.mistakeRepo.create({
+        const questionType = normalizeQuestionType(dto.questionType ?? dto.mistakeType) ?? dto.questionType ?? null;
+        const errorCause: ErrorCause =
+            dto.errorCause ??
+            classifyErrorCause({
+                questionType,
+                userAnswer: dto.userAnswer,
+                correctAnswers: dto.correctAnswers ?? [],
+                instructions: dto.instructions,
+                trailingSkipped: dto.trailingSkipped,
+            });
+        const existing = dto.attemptId
+            ? await this.mistakeRepo.findOne({ where: { attemptId: dto.attemptId, questionId: dto.questionId } })
+            : null;
+        const mistake = existing ?? this.mistakeRepo.create({
             learnerId: dto.learnerId,
             questionId: dto.questionId,
-            mistakeType: dto.mistakeType,
             createdAt: new Date(),
+            status: 'new',
+            nextReviewAt: new Date(Date.now() + 86_400_000),
         });
+        mistake.mistakeType = dto.mistakeType ?? questionType ?? 'wrong_answer';
+        mistake.attemptId = dto.attemptId ?? mistake.attemptId ?? null;
+        mistake.skill = dto.skill ?? mistake.skill ?? null;
+        mistake.questionType = questionType;
+        mistake.errorCause = errorCause;
+        mistake.userAnswer = dto.userAnswer ?? null;
+        mistake.correctAnswer = dto.correctAnswers?.[0] ?? null;
+        mistake.updatedAt = new Date();
         return this.mistakeRepo.save(mistake);
     }
 
@@ -251,7 +356,7 @@ export class AnalyticsServiceService {
 
         await db.query(`DELETE FROM learner_band_profiles  WHERE learner_id = $1`, [learnerId]);
         await db.query(`DELETE FROM learner_progress_snapshots WHERE learner_id = $1`, [learnerId]);
-        await db.query(`DELETE FROM learner_mistakes WHERE learner_id = $1`, [learnerId]);
+        await db.query(`DELETE FROM learner_mistakes WHERE learner_id = $1 AND attempt_id IS NULL`, [learnerId]);
 
         const skillRows: Array<{ skill: string; avg_band: string }> = await db.query(
             `
@@ -316,26 +421,35 @@ export class AnalyticsServiceService {
 
         const wrongRows: Array<{ question_id: string; question_type: string }> = await db.query(
             `
-            SELECT qa.question_id, q.question_type
+            SELECT qa.question_id, q.question_type, ta.id AS attempt_id, qa.answer AS user_answer,
+                   t.skill, ans.correct_answers, g.instructions
             FROM   question_attempts qa
             INNER  JOIN test_attempts ta ON ta.id  = qa.test_attempt_id
             INNER  JOIN questions      q  ON q.id  = qa.question_id
+            LEFT   JOIN question_groups g ON g.id = q.question_group_id
+            LEFT   JOIN question_answers ans ON ans.question_id = q.id
+            LEFT   JOIN tests t ON t.id = ta.test_id
             WHERE  ta.learner_id   = $1
               AND  ta.submitted_at IS NOT NULL
               AND  qa.is_correct   = false
+              AND  NOT EXISTS (SELECT 1 FROM learner_mistakes lm WHERE lm.attempt_id = ta.id AND lm.question_id = qa.question_id)
             `,
             [learnerId],
         );
 
         let mistakesInserted = 0;
-        for (const row of wrongRows) {
-            const mistake = this.mistakeRepo.create({
+        for (const row of wrongRows as Array<Record<string, any>>) {
+            await this.recordMistake({
                 learnerId,
                 questionId: row.question_id,
                 mistakeType: row.question_type ?? 'wrong_answer',
-                createdAt: new Date(),
+                attemptId: row.attempt_id,
+                skill: row.skill ?? null,
+                questionType: row.question_type ?? null,
+                userAnswer: row.user_answer ?? '',
+                correctAnswers: Array.isArray(row.correct_answers) ? row.correct_answers : [],
+                instructions: row.instructions ?? null,
             });
-            await this.mistakeRepo.save(mistake);
             mistakesInserted++;
         }
 

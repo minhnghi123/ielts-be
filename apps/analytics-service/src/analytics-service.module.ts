@@ -7,6 +7,7 @@ import { LearnerBandProfile } from './entities/learner-band-profile.entity';
 import { LearnerMistake } from './entities/learner-mistake.entity';
 import { LearnerProgressSnapshot } from './entities/learner-progress-snapshot.entity';
 import { LearnerGoal } from './entities/learner-goal.entity';
+import { QuestionExplanation } from './entities/question-explanation.entity';
 
 @Module({
     imports: [
@@ -29,7 +30,7 @@ import { LearnerGoal } from './entities/learner-goal.entity';
                     password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
                     database: config.get<string>('DB_NAME') || process.env.DB_NAME,
                     ssl: { rejectUnauthorized: false },
-                    entities: [LearnerBandProfile, LearnerMistake, LearnerProgressSnapshot, LearnerGoal],
+                    entities: [LearnerBandProfile, LearnerMistake, LearnerProgressSnapshot, LearnerGoal, QuestionExplanation],
                     synchronize: false,
                     // Connection pool settings for Supabase PgBouncer (transaction mode)
                     extra: {
@@ -45,6 +46,7 @@ import { LearnerGoal } from './entities/learner-goal.entity';
         TypeOrmModule.forFeature([
             LearnerBandProfile,
             LearnerGoal,
+            QuestionExplanation,
             LearnerMistake,
             LearnerProgressSnapshot,
         ]),
