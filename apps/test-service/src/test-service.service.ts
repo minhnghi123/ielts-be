@@ -15,6 +15,7 @@ import {
   FindOptionsWhere,
   DataSource,
   ILike,
+  In,
   IsNull,
 } from 'typeorm';
 import { Test, SKILL_DEFAULT_DURATION_MINUTES } from './entities/test.entity';
@@ -1503,6 +1504,10 @@ export class TestServiceService {
     let rawScore = 0;
     let bandScore: number | null = null;
     const wrongQuestionIds: string[] = [];
+    const wrongDetails = new Map<
+      string,
+      { userAnswer: string; correctAnswers: string[]; caseSensitive: boolean }
+    >();
     const questionAttempts: QuestionAttempt[] = [];
 
     // Grade against every question of the test so skipped questions count as wrong.
@@ -1538,7 +1543,14 @@ export class TestServiceService {
           );
         }
         if (isCorrect) rawScore++;
-        else wrongQuestionIds.push(questionId);
+        else {
+          wrongQuestionIds.push(questionId);
+          wrongDetails.set(questionId, {
+            userAnswer: given,
+            correctAnswers: key?.correctAnswers ?? [],
+            caseSensitive: key?.caseSensitive ?? false,
+          });
+        }
       }
 
       questionAttempts.push(
@@ -1587,9 +1599,12 @@ export class TestServiceService {
     await this.attemptRepo.update(attempt.id, updatePayload);
 
     const submitted = await this.getAttemptById(attempt.id);
-    await this.syncAnalyticsAfterSubmit(submitted, [
-      ...new Set(wrongQuestionIds),
-    ]);
+    await this.syncAnalyticsAfterSubmit(
+      submitted,
+      [...new Set(wrongQuestionIds)],
+      wrongDetails,
+      questionIds,
+    );
     this.emitClassroomEvent(
       RMQ_PATTERNS.CLASSROOM.ATTEMPT_SUBMITTED,
       submitted,
@@ -1614,6 +1629,11 @@ export class TestServiceService {
   private async syncAnalyticsAfterSubmit(
     attempt: TestAttempt,
     wrongQuestionIds: string[],
+    wrongDetails: Map<
+      string,
+      { userAnswer: string; correctAnswers: string[]; caseSensitive: boolean }
+    > = new Map(),
+    orderedQuestionIds: string[] = [],
   ): Promise<void> {
     const band = Number(attempt.bandScore ?? 0);
     if (!attempt.submittedAt || !band) return;
@@ -1675,18 +1695,46 @@ export class TestServiceService {
     if (wrongQuestionIds.length === 0) return;
 
     try {
+      // Question type + group instructions let analytics classify *why* it was wrong.
+      const questions = await this.questionRepo.find({
+        where: { id: In(wrongQuestionIds) },
+        relations: ['questionGroup'],
+      });
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      // Trailing blanks = the learner ran out of time rather than not knowing.
+      let trailingFrom = orderedQuestionIds.length;
+      for (let i = orderedQuestionIds.length - 1; i >= 0; i--) {
+        const d = wrongDetails.get(orderedQuestionIds[i]);
+        if (d && !d.userAnswer.trim()) trailingFrom = i;
+        else break;
+      }
+      const trailing = new Set(
+        orderedQuestionIds.length - trailingFrom >= 3
+          ? orderedQuestionIds.slice(trailingFrom)
+          : [],
+      );
+
       await Promise.all(
-        wrongQuestionIds.map((questionId) =>
-          fetch(`${baseUrl}/analytics/mistakes`, {
+        wrongQuestionIds.map((questionId) => {
+          const q = byId.get(questionId);
+          const d = wrongDetails.get(questionId);
+          return fetch(`${baseUrl}/analytics/mistakes`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
               learnerId,
               questionId,
-              mistakeType: 'wrong_answer',
+              attemptId: attempt.id,
+              skill,
+              questionType: q?.questionType ?? null,
+              mistakeType: q?.questionType ?? 'wrong_answer',
+              userAnswer: d?.userAnswer ?? '',
+              correctAnswers: d?.correctAnswers ?? [],
+              instructions: q?.questionGroup?.instructions ?? null,
+              trailingSkipped: trailing.has(questionId),
             }),
-          }),
-        ),
+          });
+        }),
       );
     } catch (error) {
       this.logger.warn(

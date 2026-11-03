@@ -250,3 +250,26 @@ async handleTestSubmitted(data: {
 ```
 
 This is the primary trigger for analytics updates — every time a learner submits a test, their analytics are automatically rebuilt from scratch.
+
+## Sổ lỗi (learner_mistakes) & cache giải thích (question_explanations) — PR2
+
+Khi `test-service` chấm xong một bài Reading/Listening, nó gọi `POST /analytics/mistakes` cho từng câu sai với payload đầy đủ
+(`attemptId`, `skill`, `questionType`, `userAnswer`, `correctAnswers`, `instructions` của nhóm câu, `trailingSkipped`).
+`recordMistake()` **upsert theo (attempt_id, question_id)** và gán `error_cause` bằng `classifyErrorCause()` (`libs/common/src/learning/error-cause.ts`):
+
+| error_cause | Luật |
+|---|---|
+| `skipped` / `time_management` | bỏ trống / ≥3 câu cuối bỏ trống liên tiếp |
+| `tfng_confusion` | dạng T/F/NG, Y/N/NG |
+| `location_miss` | matching_heading, matching |
+| `inference` | multiple_choice |
+| `word_limit` | vượt "NO MORE THAN X WORDS" nhưng chứa đáp án |
+| `number_format` | đáp án số, trả lời số khác |
+| `spelling` | Levenshtein ≤ len/4 hoặc khác hậu tố s/es/ed/ing |
+| `paraphrase_miss` | còn lại (completion / features / endings) |
+
+`fullSyncLearnerAnalytics` chỉ xoá/ghi lại các dòng legacy (`attempt_id IS NULL`), không đụng dòng đã có trạng thái/SRS.
+
+Endpoints: `GET /analytics/mistakes/:learnerId?status&skill&questionType&attemptId&due=1`, `GET /analytics/mistakes/:learnerId/summary?attemptId`,
+`PATCH /analytics/mistakes/:id/status {status}` (chủ sở hữu), `GET /analytics/explanations?questionId&userAnswer` (fallback về dòng generic `user_answer_norm=''`),
+`PUT /analytics/explanations` (system/admin/teacher; AI không ghi đè nội dung do người viết), `POST /analytics/explanations/:id/vote {helpful}`.

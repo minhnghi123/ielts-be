@@ -11,6 +11,8 @@ import {
     HttpStatus,
     Logger,
     UseGuards,
+    Patch,
+    ForbiddenException,
 } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import {
@@ -26,6 +28,9 @@ import {
     UpsertBandProfileDto,
     CreateSnapshotDto,
     CreateMistakeDto,
+    UpdateMistakeStatusDto,
+    UpsertExplanationDto,
+    VoteExplanationDto,
 } from './dto/analytics.dto';
 import { UpsertLearnerGoalsDto } from './dto/learner-goals.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -95,10 +100,63 @@ export class AnalyticsServiceController {
     }
 
     @Get('mistakes/:learnerId')
-    @ApiOperation({ summary: "Get a learner's mistake history" })
-    getMistakes(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+    @ApiOperation({ summary: "Learner's mistake notebook (filters: status, skill, questionType, attemptId, due=1)" })
+    getMistakes(
+        @Param('learnerId', ParseUUIDPipe) learnerId: string,
+        @CurrentUser() user: RequestUser,
+        @Query('status') status?: string,
+        @Query('skill') skill?: string,
+        @Query('questionType') questionType?: string,
+        @Query('attemptId') attemptId?: string,
+        @Query('due') due?: string,
+    ) {
         assertOwnerOrPrivileged(user, learnerId);
-        return this.service.getMistakes(learnerId);
+        return this.service.listMistakes(learnerId, { status, skill, questionType, attemptId, dueOnly: due === '1' || due === 'true' });
+    }
+
+    @Get('mistakes/:learnerId/summary')
+    @ApiOperation({ summary: 'Mistake counts by error cause / question type (optionally one attempt)' })
+    getMistakeSummary(
+        @Param('learnerId', ParseUUIDPipe) learnerId: string,
+        @CurrentUser() user: RequestUser,
+        @Query('attemptId') attemptId?: string,
+    ) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.mistakeSummary(learnerId, attemptId || undefined);
+    }
+
+    @Patch('mistakes/:id/status')
+    @ApiOperation({ summary: 'Mark a mistake new / reviewing / fixed (owner only)' })
+    updateMistakeStatus(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: UpdateMistakeStatusDto,
+        @CurrentUser() user: RequestUser,
+    ) {
+        if (!user?.profileId) throw new ForbiddenException('Learner profile required');
+        return this.service.updateMistakeStatus(id, user.profileId, dto.status);
+    }
+
+    // ─── Explanation cache ────────────────────────────────────────────────────────
+
+    @Get('explanations')
+    @ApiOperation({ summary: 'Cached Vietnamese explanation for a question (+ optional wrong answer)' })
+    getExplanation(@Query('questionId', ParseUUIDPipe) questionId: string, @Query('userAnswer') userAnswer?: string) {
+        return this.service.findExplanation(questionId, userAnswer);
+    }
+
+    @Put('explanations')
+    @Roles('system', 'admin', 'teacher')
+    @ApiOperation({ summary: 'Store/replace an explanation (AI via server route, or teacher/admin)' })
+    upsertExplanation(@Body() dto: UpsertExplanationDto, @CurrentUser() user: RequestUser) {
+        if (user?.role === 'teacher') dto.source = 'teacher';
+        return this.service.upsertExplanation(dto);
+    }
+
+    @Post('explanations/:id/vote')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Learner feedback: was the explanation helpful?' })
+    voteExplanation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: VoteExplanationDto) {
+        return this.service.voteExplanation(id, dto.helpful);
     }
 
     @Post('mistakes')

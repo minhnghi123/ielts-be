@@ -221,3 +221,13 @@ Missing or expired tokens return 401. The frontend Axios interceptor handles thi
   "rawException": { ... }
 }
 ```
+
+### Mistakes & explanations (PR2)
+| Method | Path | Role | Mô tả |
+|---|---|---|---|
+| GET | `/api/analytics/mistakes/:learnerId` | owner/teacher/admin | Sổ lỗi; query `status`, `skill`, `questionType`, `attemptId`, `due=1` |
+| GET | `/api/analytics/mistakes/:learnerId/summary` | owner/teacher/admin | `{total, byCause, byQuestionType, byStatus}` (tuỳ chọn `attemptId`) |
+| PATCH | `/api/analytics/mistakes/:id/status` | owner | `{status: new|reviewing|fixed}` |
+| GET | `/api/analytics/explanations?questionId&userAnswer` | signed-in | Giải thích tiếng Việt đã cache (null nếu chưa có) |
+| PUT | `/api/analytics/explanations` | system/admin/teacher | Upsert theo `(questionId, userAnswer)` |
+| POST | `/api/analytics/explanations/:id/vote` | signed-in | `{helpful: boolean}` |
