@@ -172,7 +172,7 @@ Every time a learner submits a test, submission-service publishes an `analytics.
 
 - Node.js 20+, pnpm
 - PostgreSQL via Supabase (get the connection string from Project Settings)
-- RabbitMQ — local quickstart: `docker run -d -p 5672:5672 rabbitmq:3`
+- RabbitMQ — required by every service (inter-service events). Local quickstart: `docker compose up -d` (uses `docker-compose.yml`, management UI at http://localhost:15672, guest/guest). Without a broker you will see `ECONNREFUSED 127.0.0.1:5672` on startup.
 
 ### Step 1 — Install
 
@@ -206,7 +206,7 @@ DB_NAME=postgres
 JWT_SECRET=<strong-random-secret-min-32-chars>
 JWT_EXPIRES_IN=24h
 
-# RabbitMQ — submission-service and analytics-service only
+# RabbitMQ — all services (defaults to this value when unset)
 RABBITMQ_URL=amqp://guest:guest@localhost:5672
 ```
 
@@ -242,8 +242,8 @@ pnpm run start:prod
 ### Docker (full stack)
 
 ```bash
-# Spin up all services + PostgreSQL + RabbitMQ
-docker compose up
+# Local infrastructure: RabbitMQ (add --profile db for a local PostgreSQL instead of Supabase)
+docker compose up -d
 
 docker compose down
 ```

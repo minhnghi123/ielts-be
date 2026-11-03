@@ -1,0 +1,33 @@
+# Local infrastructure for development.
+#   docker compose up -d            → RabbitMQ only (DB stays on Supabase)
+#   docker compose --profile db up -d → RabbitMQ + a local Postgres (set DB_* in each apps/*/.env accordingly)
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ielts-rmq
+    ports:
+      - "5672:5672"    # AMQP  → RABBITMQ_URL=amqp://guest:guest@localhost:5672
+      - "15672:15672"  # Management UI (guest / guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  postgres:
+    profiles: ["db"]
+    image: postgres:16-alpine
+    container_name: ielts-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ielts
+    ports:
+      - "5432:5432"
+    volumes:
+      - ielts-pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  ielts-pg-data:
