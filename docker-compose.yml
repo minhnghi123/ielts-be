@@ -1,0 +1,16 @@
+# Local infrastructure for development: RabbitMQ (every service needs the broker).
+# The database stays on Supabase — see apps/*/.env.example for DB_* settings.
+#   docker compose up -d
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ielts-rmq
+    ports:
+      - "5672:5672"    # AMQP — point RABBITMQ_URL in each apps/*/.env here
+      - "15672:15672"  # Management UI (default RabbitMQ dev login)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped

@@ -9,10 +9,10 @@ export class QuestionAttempt {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'test_attempt_id' })
+    @Column({ name: 'test_attempt_id', type: 'uuid' })
     testAttemptId: string;
 
-    @Column({ name: 'question_id' })
+    @Column({ name: 'question_id', type: 'uuid' })
     questionId: string;
 
     @Column({ type: 'text', nullable: true })

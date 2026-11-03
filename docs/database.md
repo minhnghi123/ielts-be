@@ -9,7 +9,8 @@ DDL source: [`db/database_schema.sql`](../db/database_schema.sql) — apply manu
 
 | Service | Tables |
 |---|---|
-| **auth-service** | `accounts`, `learner_profiles`, `admin_profiles`, `admin_roles`, `admin_role_assignments` |
+| **auth-service** | `accounts`, `learner_profiles`, `teacher_profiles`, `admin_profiles`, `admin_roles`, `admin_role_assignments` |
+| **classroom-service** | `classes`, `class_members`, `class_assignments`, `assignment_submissions`, `class_posts` |
 | **test-service** | `tests`, `sections`, `question_groups`, `questions`, `question_answers`, `writing_tasks`, `speaking_parts`, `test_attempts`, `question_attempts` (full attempt lifecycle: start → autosave draft → submit/expire → review) |
 | **submission-service** | `writing_submissions`, `writing_scores`, `ai_writing_gradings`, `speaking_submissions`, `speaking_scores`, read-only global stats |
 | **analytics-service** | `learner_band_profiles`, `learner_mistakes`, `learner_progress_snapshots` |
@@ -294,7 +295,7 @@ Raw AI model output for a writing submission.
 |---|---|---|---|---|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
 | `submission_id` | `uuid` | NO | — | FK → `writing_submissions.id` |
-| `model_name` | `varchar(100)` | YES | — | e.g., `'llama-3.3-70b-versatile'` |
+| `model_name` | `varchar(100)` | YES | — | e.g., `'openai/gpt-oss-120b'` |
 | `model_version` | `varchar(50)` | YES | — | |
 | `prompt_version` | `varchar(50)` | YES | — | Grading prompt version for reproducibility |
 | `task_response` | `numeric(2,1)` | YES | — | Task Response criterion band |
@@ -418,3 +419,10 @@ To add a new column:
 2. Apply it manually to the Supabase database
 3. Update the TypeORM entity to reflect the new column
 4. Update the relevant DTO and service
+
+## Migration 002 — teacher & classroom (`db/migrations/002_teacher_classroom.sql`)
+
+Adds `teacher_profiles`; `tests.visibility`, `tests.owner_role`; `test_attempts.assignment_id`,
+`test_attempts.attempt_no`; and the classroom-service tables `classes`, `class_members`,
+`class_assignments`, `assignment_submissions`, `class_posts`. Column-level documentation lives in
+`docs/features/teacher-classroom/PLAN.md` §5. Rollback: `002_teacher_classroom_down.sql`.

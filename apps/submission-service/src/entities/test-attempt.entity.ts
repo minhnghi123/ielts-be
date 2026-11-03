@@ -10,13 +10,13 @@ export class TestAttempt {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'learner_id' })
+    @Column({ name: 'learner_id', type: 'uuid' })
     learnerId: string;
 
-    @Column({ name: 'test_id' })
+    @Column({ name: 'test_id', type: 'uuid' })
     testId: string;
 
-    @Column({ name: 'started_at' })
+    @CreateDateColumn({ name: 'started_at', type: 'timestamptz' })
     startedAt: Date;
 
     @Column({ name: 'submitted_at', nullable: true })

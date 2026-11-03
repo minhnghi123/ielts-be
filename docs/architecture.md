@@ -31,7 +31,8 @@ API Gateway (port 5000)   ← apps/api-gateway/
     ├── /api/writing-gradings/* → submission-service (port 5003)
     ├── /api/stats/*        → submission-service (port 5003)
     ├── /api/learners/*     → submission-service (port 5003)
-    └── /api/analytics/*    → analytics-service (port 5004)
+    ├── /api/analytics/*    → analytics-service (port 5004)
+    └── /api/classes/*, /api/teacher/* → classroom-service (port 5005)
 ```
 
 **Note:** `/api/attempts/*` routes are ambiguous — test-service handles attempt creation (POST `/tests/:id/attempts`) and analytics-service handles analytics; submission-service handles answer saving, submission finalization, and retrieval. The gateway proxy is route-prefix based, not method-based.
@@ -201,3 +202,19 @@ export class AppModule {}
 ```
 
 `ConfigModule.forRoot()` uses `isGlobal: true` — no need to re-import in feature modules.
+
+## Teacher role & classroom-service
+
+- Roles: `learner` | `teacher` | `admin` (JWT `role`, plus `teacherStatus` for teachers). Teachers register
+  (or are promoted by an admin) and must be **approved** before authoring tests or creating classes.
+- Gateway: `AUTHOR_ROUTES` (test authoring, `/api/teacher/*`) allow approved teachers and admins;
+  ownership of a teacher's own tests is enforced in test-service by `ContentOwnerGuard`.
+- Tests have `visibility` (`public` shared bank / `private` teacher bank). Private tests are only served to
+  the author, admins, and learners who hold a non-archived assignment for them (test-service asks
+  classroom-service `GET /internal/access`).
+- Attempts started from an assignment carry `assignment_id`/`attempt_no`; test-service validates the time
+  window/attempt limit via `GET /internal/assignments/:id/eligibility` and caps `expires_at` at the hard close.
+- classroom-service owns `classes`, `class_members`, `class_assignments`, `assignment_submissions`
+  (read model fed by RMQ events) and `class_posts`. Teachers can override Writing/Speaking bands
+  (`teacher_band`, `teacher_rubric`, `teacher_feedback`); `final_band = teacher_band ?? ai_band`.
+- Full design: `docs/features/teacher-classroom/PLAN.md`.

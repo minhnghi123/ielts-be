@@ -12,7 +12,7 @@ Each NestJS service loads its **own** `.env` file from `apps/<service-name>/.env
 |---|---|---|
 | `JWT_SECRET` | Yes | Same secret as auth-service. The gateway verifies every token itself and forwards identity as `x-user-id`, `x-user-role`, `x-profile-id` headers. Startup fails if missing. |
 | `INTERNAL_API_KEY` | Recommended | Shared secret attached as `x-internal-key` to every forwarded request. When set, downstream services reject requests that lack it, so they cannot be called directly. Trusted server code (Next.js API routes) may also call the gateway with this header to act as role `system` (e.g. `PUT /api/attempts/:id/ai-feedback`). |
-| `AUTH_SERVICE_URL` / `TEST_SERVICE_URL` / `SUBMISSION_SERVICE_URL` / `ANALYTICS_SERVICE_URL` | No | Downstream base URLs (default `http://localhost:500x`) |
+| `AUTH_SERVICE_URL` / `TEST_SERVICE_URL` / `SUBMISSION_SERVICE_URL` / `ANALYTICS_SERVICE_URL` / `CLASSROOM_SERVICE_URL` | No | Downstream base URLs (default `http://localhost:500x`; classroom = 5005) |
 | `CORS_ORIGIN` | No | Comma-separated allowed origins (default `http://localhost:3000`) |
 
 All downstream services additionally read `INTERNAL_API_KEY` (same value as the gateway) and `CORS_ORIGIN`.
@@ -139,3 +139,15 @@ All services use this TypeORM configuration pattern (`TypeOrmModule.forRootAsync
 ## Docker Compose Environment
 
 When running via `docker compose up`, environment variables are sourced from the root `.env` file. The Compose file maps them to each service container. The root `.env` is not used when running services directly via `pnpm run start:dev`.
+
+## classroom-service (port 5005)
+
+| Variable | Required | Description |
+|---|---|---|
+| `DB_HOST` / `DB_PORT` / `DB_USERNAME` / `DB_PASSWORD` / `DB_NAME` | Yes | Same Supabase database as the other services |
+| `RABBITMQ_URL` | Yes | Consumes `ielts.classroom` (attempt events from test-service) |
+| `INTERNAL_API_KEY` | Yes (prod) | Must equal the gateway value; also used to call auth/test/analytics internally |
+| `AUTH_SERVICE_URL`, `TEST_SERVICE_URL`, `ANALYTICS_SERVICE_URL` | No | Internal lookups (learner names, tests/attempts, progress) |
+| `CORS_ORIGIN` | No | Allowed origins |
+
+test-service additionally needs `CLASSROOM_SERVICE_URL` (private-test access + assignment eligibility checks).

@@ -290,7 +290,7 @@ Save an AI grading result for a writing submission.
 ```json
 {
   "submissionId": "uuid",
-  "modelName": "llama-3.3-70b-versatile",
+  "modelName": "openai/gpt-oss-120b",
   "modelVersion": "v1",
   "promptVersion": "writing-v2",
   "taskResponse": 6.0,

@@ -40,6 +40,14 @@ export class Test {
   @Column({ name: 'is_mock' })
   isMock: boolean;
 
+  /** 'public' = shared bank, 'private' = only reachable through a class assignment. */
+  @Column({ type: 'varchar', length: 10, default: 'public' })
+  visibility: 'public' | 'private';
+
+  /** Who authored it — teacher-authored tests are private by default. */
+  @Column({ name: 'owner_role', type: 'varchar', length: 10, default: 'admin' })
+  ownerRole: 'admin' | 'teacher';
+
   @Column({ name: 'created_by' })
   createdBy: string;
 

@@ -1,4 +1,12 @@
-import { IsOptional, IsIn, IsBoolean, IsInt, Min, IsString, MaxLength } from 'class-validator';
+import {
+  IsOptional,
+  IsIn,
+  IsBoolean,
+  IsInt,
+  Min,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -21,10 +29,35 @@ export class QueryTestsDto {
   @IsOptional()
   difficulty?: string;
 
-  @ApiPropertyOptional({ enum: ['draft', 'published', 'archived'], description: 'Admin only' })
+  @ApiPropertyOptional({
+    enum: ['draft', 'published', 'archived'],
+    description: 'Admin only',
+  })
   @IsIn(['draft', 'published', 'archived'])
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional({ description: 'Teachers/admins: only tests I created' })
+  @IsBoolean()
+  @IsOptional()
+  @Type(() => Boolean)
+  mine?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['public', 'private'],
+    description: 'Admin only',
+  })
+  @IsIn(['public', 'private'])
+  @IsOptional()
+  visibility?: string;
+
+  @ApiPropertyOptional({
+    enum: ['admin', 'teacher'],
+    description: 'Admin only',
+  })
+  @IsIn(['admin', 'teacher'])
+  @IsOptional()
+  ownerRole?: string;
 
   @ApiPropertyOptional({ example: 'Cambridge 18' })
   @IsString()

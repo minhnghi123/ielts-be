@@ -4,6 +4,7 @@ export const SERVICES = {
   TEST_SERVICE: 'test-service',
   SUBMISSION_SERVICE: 'submission-service',
   ANALYTICS_SERVICE: 'analytics-service',
+  CLASSROOM_SERVICE: 'classroom-service',
 } as const;
 
 export const SERVICES_PORTS = {
@@ -12,4 +13,5 @@ export const SERVICES_PORTS = {
   TEST_SERVICE: 5002,
   SUBMISSION_SERVICE: 5003,
   ANALYTICS_SERVICE: 5004,
+  CLASSROOM_SERVICE: 5005,
 } as const;

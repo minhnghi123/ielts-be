@@ -5,11 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Account } from './entities/account.entity';
 import { LearnerProfile } from './entities/learner-profile.entity';
+import {
+  TeacherProfile,
+  TeacherApprovalStatus,
+} from './entities/teacher-profile.entity';
 import { RegisterLearnerDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { createClient } from '@supabase/supabase-js';
@@ -23,17 +27,22 @@ export class AuthServiceService {
     private readonly accountRepository: Repository<Account>,
     @InjectRepository(LearnerProfile)
     private readonly learnerProfileRepository: Repository<LearnerProfile>,
+    @InjectRepository(TeacherProfile)
+    private readonly teacherProfileRepository: Repository<TeacherProfile>,
     private readonly jwtService: JwtService,
   ) {
     this.supabase = createClient(
       process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_KEY || ''
+      process.env.SUPABASE_KEY || '',
     );
   }
 
   async googleLogin(accessToken: string) {
     // 1. Verify token with Supabase
-    const { data: { user }, error } = await this.supabase.auth.getUser(accessToken);
+    const {
+      data: { user },
+      error,
+    } = await this.supabase.auth.getUser(accessToken);
 
     if (error || !user) {
       throw new UnauthorizedException('Invalid Google token');
@@ -46,7 +55,7 @@ export class AuthServiceService {
     // 2. Check if account exists
     let account = await this.accountRepository.findOne({
       where: { email },
-      relations: ['learnerProfile', 'adminProfile'],
+      relations: ['learnerProfile', 'adminProfile', 'teacherProfile'],
     });
 
     if (!account) {
@@ -66,12 +75,19 @@ export class AuthServiceService {
         accountId: account.id,
         currentLevel: 'beginner',
       });
-      account.learnerProfile = await this.learnerProfileRepository.save(learnerProfile);
+      account.learnerProfile =
+        await this.learnerProfileRepository.save(learnerProfile);
     } else {
       // Optional: Update name/avatar if they are missing
       let updated = false;
-      if (!account.fullName && fullName) { account.fullName = fullName; updated = true; }
-      if (!account.avatarUrl && avatarUrl) { account.avatarUrl = avatarUrl; updated = true; }
+      if (!account.fullName && fullName) {
+        account.fullName = fullName;
+        updated = true;
+      }
+      if (!account.avatarUrl && avatarUrl) {
+        account.avatarUrl = avatarUrl;
+        updated = true;
+      }
       if (updated) {
         await this.accountRepository.save(account);
       }
@@ -81,14 +97,14 @@ export class AuthServiceService {
       throw new UnauthorizedException('Account is not active');
     }
 
-    const role = account.learnerProfile ? 'learner' : 'admin';
-    const profileId = account.learnerProfile?.id || account.adminProfile?.id;
+    const { role, profileId, teacherStatus } = this.resolveIdentity(account);
 
     // 4. Generate system JWT
     const payload = {
       sub: account.id,
       email: account.email,
       role,
+      teacherStatus,
       profileId,
     };
 
@@ -102,13 +118,15 @@ export class AuthServiceService {
         fullName: account.fullName,
         avatarUrl: account.avatarUrl,
         role,
+        teacherStatus,
         profileId,
       },
     };
   }
 
   async registerLearner(registerDto: RegisterLearnerDto) {
-    const { email, password, confirmPassword } = registerDto;
+    const { email, password, confirmPassword, role, fullName, organization } =
+      registerDto;
 
     // Validate password confirmation
     if (password !== confirmPassword) {
@@ -132,22 +150,35 @@ export class AuthServiceService {
       email,
       password: hashedPassword,
       status: 'active',
+      fullName: fullName?.trim() || undefined,
     });
 
     const savedAccount = await this.accountRepository.save(account);
 
-    // Create learner profile
-    const learnerProfile = this.learnerProfileRepository.create({
-      accountId: savedAccount.id,
-      currentLevel: 'beginner',
-    });
-
-    await this.learnerProfileRepository.save(learnerProfile);
+    if (role === 'teacher') {
+      // Teachers wait for an admin to approve them before they can create classes.
+      await this.teacherProfileRepository.save(
+        this.teacherProfileRepository.create({
+          accountId: savedAccount.id,
+          organization: organization?.trim() || null,
+          approvalStatus: 'pending',
+        }),
+      );
+    } else {
+      await this.learnerProfileRepository.save(
+        this.learnerProfileRepository.create({
+          accountId: savedAccount.id,
+          currentLevel: 'beginner',
+        }),
+      );
+    }
 
     return {
       id: savedAccount.id,
       email: savedAccount.email,
       status: savedAccount.status,
+      role: role === 'teacher' ? 'teacher' : 'learner',
+      teacherStatus: role === 'teacher' ? 'pending' : undefined,
       createdAt: savedAccount.createdAt,
     };
   }
@@ -158,7 +189,7 @@ export class AuthServiceService {
     // Find account with profile
     const account = await this.accountRepository.findOne({
       where: { email },
-      relations: ['learnerProfile', 'adminProfile'],
+      relations: ['learnerProfile', 'adminProfile', 'teacherProfile'],
     });
 
     if (!account) {
@@ -166,7 +197,9 @@ export class AuthServiceService {
     }
 
     if (!account.password) {
-      throw new UnauthorizedException('This account was created via Google Sign-In. Please sign in with Google.');
+      throw new UnauthorizedException(
+        'This account was created via Google Sign-In. Please sign in with Google.',
+      );
     }
 
     // Verify password
@@ -182,14 +215,14 @@ export class AuthServiceService {
     }
 
     // Determine role
-    const role = account.learnerProfile ? 'learner' : 'admin';
-    const profileId = account.learnerProfile?.id || account.adminProfile?.id;
+    const { role, profileId, teacherStatus } = this.resolveIdentity(account);
 
     // Generate JWT token
     const payload = {
       sub: account.id,
       email: account.email,
       role,
+      teacherStatus,
       profileId,
     };
 
@@ -203,6 +236,7 @@ export class AuthServiceService {
         fullName: account.fullName,
         avatarUrl: account.avatarUrl,
         role,
+        teacherStatus,
         profileId,
       },
     };
@@ -211,15 +245,14 @@ export class AuthServiceService {
   async validateUser(userId: string) {
     const account = await this.accountRepository.findOne({
       where: { id: userId },
-      relations: ['learnerProfile', 'adminProfile'],
+      relations: ['learnerProfile', 'adminProfile', 'teacherProfile'],
     });
 
     if (!account) {
       throw new NotFoundException('User not found');
     }
 
-    const role = account.learnerProfile ? 'learner' : 'admin';
-    const profileId = account.learnerProfile?.id || account.adminProfile?.id;
+    const { role, profileId, teacherStatus } = this.resolveIdentity(account);
 
     return {
       id: account.id,
@@ -227,6 +260,7 @@ export class AuthServiceService {
       fullName: account.fullName,
       avatarUrl: account.avatarUrl,
       role,
+      teacherStatus,
       profileId,
       status: account.status,
     };
@@ -240,12 +274,14 @@ export class AuthServiceService {
     page: number = 1,
     limit: number = 10,
     search?: string,
-    role?: 'learner' | 'admin',
+    role?: 'learner' | 'teacher' | 'admin',
     status?: string,
   ) {
-    const queryBuilder = this.accountRepository.createQueryBuilder('account')
+    const queryBuilder = this.accountRepository
+      .createQueryBuilder('account')
       .leftJoinAndSelect('account.learnerProfile', 'learnerProfile')
       .leftJoinAndSelect('account.adminProfile', 'adminProfile')
+      .leftJoinAndSelect('account.teacherProfile', 'teacherProfile')
       .orderBy('account.createdAt', 'DESC');
 
     if (search) {
@@ -255,7 +291,14 @@ export class AuthServiceService {
       );
     }
     if (role === 'admin') queryBuilder.andWhere('adminProfile.id IS NOT NULL');
-    if (role === 'learner') queryBuilder.andWhere('adminProfile.id IS NULL');
+    if (role === 'teacher')
+      queryBuilder.andWhere(
+        'adminProfile.id IS NULL AND teacherProfile.id IS NOT NULL',
+      );
+    if (role === 'learner')
+      queryBuilder.andWhere(
+        'adminProfile.id IS NULL AND teacherProfile.id IS NULL',
+      );
     if (status) queryBuilder.andWhere('account.status = :status', { status });
 
     const [accounts, total] = await queryBuilder
@@ -264,7 +307,7 @@ export class AuthServiceService {
       .getManyAndCount();
 
     const formattedAccounts = accounts.map((account) => {
-      const role = account.adminProfile ? 'admin' : 'learner';
+      const { role, teacherStatus } = this.resolveIdentity(account);
       const level = account.learnerProfile?.currentLevel;
 
       return {
@@ -274,6 +317,7 @@ export class AuthServiceService {
         avatarUrl: account.avatarUrl,
         status: account.status,
         role,
+        teacherStatus,
         level,
         createdAt: account.createdAt,
       };
@@ -292,7 +336,9 @@ export class AuthServiceService {
     userId: string,
     dto: { currentPassword: string; newPassword: string },
   ) {
-    const account = await this.accountRepository.findOne({ where: { id: userId } });
+    const account = await this.accountRepository.findOne({
+      where: { id: userId },
+    });
     if (!account) throw new NotFoundException('User not found');
     if (!account.password) {
       throw new UnauthorizedException(
@@ -302,7 +348,9 @@ export class AuthServiceService {
     const ok = await bcrypt.compare(dto.currentPassword, account.password);
     if (!ok) throw new UnauthorizedException('Current password is incorrect');
     if (dto.currentPassword === dto.newPassword) {
-      throw new ConflictException('New password must differ from the current password');
+      throw new ConflictException(
+        'New password must differ from the current password',
+      );
     }
     account.password = await bcrypt.hash(dto.newPassword, 10);
     await this.accountRepository.save(account);
@@ -315,7 +363,9 @@ export class AuthServiceService {
     actingUserId?: string | string[],
   ) {
     if (actingUserId && actingUserId === targetId) {
-      throw new ConflictException('You cannot change the status of your own account');
+      throw new ConflictException(
+        'You cannot change the status of your own account',
+      );
     }
     const account = await this.accountRepository.findOne({
       where: { id: targetId },
@@ -327,10 +377,13 @@ export class AuthServiceService {
     return this.validateUser(targetId);
   }
 
-  async updateProfile(userId: string, updateData: { fullName?: string; avatarUrl?: string }) {
+  async updateProfile(
+    userId: string,
+    updateData: { fullName?: string; avatarUrl?: string },
+  ) {
     const account = await this.accountRepository.findOne({
       where: { id: userId },
-      relations: ['learnerProfile', 'adminProfile'],
+      relations: ['learnerProfile', 'adminProfile', 'teacherProfile'],
     });
 
     if (!account) {
@@ -347,5 +400,210 @@ export class AuthServiceService {
     await this.accountRepository.save(account);
 
     return this.validateUser(userId);
+  }
+
+  // ─── Role resolution ───────────────────────────────────────────────────────
+
+  /** admin > teacher > learner. Teachers keep any legacy learner profile for history. */
+  private resolveIdentity(account: Account): {
+    role: 'learner' | 'teacher' | 'admin';
+    profileId: string | undefined;
+    teacherStatus: TeacherApprovalStatus | undefined;
+  } {
+    if (account.adminProfile) {
+      return {
+        role: 'admin',
+        profileId: account.adminProfile.id,
+        teacherStatus: undefined,
+      };
+    }
+    if (
+      account.teacherProfile &&
+      account.teacherProfile.approvalStatus !== 'rejected'
+    ) {
+      return {
+        role: 'teacher',
+        profileId: account.teacherProfile.id,
+        teacherStatus: account.teacherProfile.approvalStatus,
+      };
+    }
+    return {
+      role: 'learner',
+      profileId: account.learnerProfile?.id,
+      teacherStatus: undefined,
+    };
+  }
+
+  // ─── Teacher management (admin) ───────────────────────────────────────────
+
+  async getTeachers(
+    approval?: TeacherApprovalStatus,
+    page = 1,
+    limit = 20,
+    search?: string,
+  ) {
+    const qb = this.teacherProfileRepository
+      .createQueryBuilder('teacher')
+      .innerJoinAndSelect('teacher.account', 'account')
+      .orderBy('teacher.createdAt', 'DESC');
+    if (approval)
+      qb.andWhere('teacher.approvalStatus = :approval', { approval });
+    if (search) {
+      qb.andWhere(
+        '(account.email ILIKE :search OR account.fullName ILIKE :search)',
+        {
+          search: `%${search}%`,
+        },
+      );
+    }
+    const [rows, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+    return {
+      data: rows.map((t) => this.formatTeacher(t)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  private formatTeacher(t: TeacherProfile) {
+    return {
+      id: t.id,
+      accountId: t.accountId,
+      email: t.account?.email,
+      fullName: t.account?.fullName,
+      avatarUrl: t.account?.avatarUrl,
+      accountStatus: t.account?.status,
+      organization: t.organization,
+      bio: t.bio,
+      approvalStatus: t.approvalStatus,
+      approvedAt: t.approvedAt,
+      rejectionReason: t.rejectionReason,
+      createdAt: t.createdAt,
+    };
+  }
+
+  async updateTeacherApproval(
+    teacherId: string,
+    status: 'approved' | 'rejected',
+    adminAccountId: string | null,
+    reason?: string,
+  ) {
+    const teacher = await this.teacherProfileRepository.findOne({
+      where: { id: teacherId },
+      relations: ['account'],
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+    teacher.approvalStatus = status;
+    teacher.approvedBy = status === 'approved' ? adminAccountId : null;
+    teacher.approvedAt = status === 'approved' ? new Date() : null;
+    teacher.rejectionReason =
+      status === 'rejected' ? reason?.trim() || null : null;
+    await this.teacherProfileRepository.save(teacher);
+    return this.formatTeacher(teacher);
+  }
+
+  /** Promote a learner to teacher (auto-approved) or demote a teacher back to learner. */
+  async updateUserRole(
+    targetAccountId: string,
+    role: 'teacher' | 'learner',
+    actingAccountId: string | null,
+    organization?: string,
+  ) {
+    if (actingAccountId && actingAccountId === targetAccountId) {
+      throw new ConflictException('You cannot change your own role');
+    }
+    const account = await this.accountRepository.findOne({
+      where: { id: targetAccountId },
+      relations: ['learnerProfile', 'adminProfile', 'teacherProfile'],
+    });
+    if (!account) throw new NotFoundException('User not found');
+    if (account.adminProfile)
+      throw new ConflictException('Admin accounts cannot change role');
+
+    if (role === 'teacher') {
+      if (account.teacherProfile) {
+        account.teacherProfile.approvalStatus = 'approved';
+        account.teacherProfile.approvedBy = actingAccountId;
+        account.teacherProfile.approvedAt = new Date();
+        account.teacherProfile.rejectionReason = null;
+        if (organization !== undefined)
+          account.teacherProfile.organization = organization || null;
+        await this.teacherProfileRepository.save(account.teacherProfile);
+      } else {
+        await this.teacherProfileRepository.save(
+          this.teacherProfileRepository.create({
+            accountId: account.id,
+            organization: organization || null,
+            approvalStatus: 'approved',
+            approvedBy: actingAccountId,
+            approvedAt: new Date(),
+          }),
+        );
+      }
+    } else {
+      if (account.teacherProfile) {
+        await this.teacherProfileRepository.remove(account.teacherProfile);
+      }
+      if (!account.learnerProfile) {
+        await this.learnerProfileRepository.save(
+          this.learnerProfileRepository.create({
+            accountId: account.id,
+            currentLevel: 'beginner',
+          }),
+        );
+      }
+    }
+    return this.validateUser(targetAccountId);
+  }
+
+  /** Teachers may edit their own organization/bio. */
+  async updateTeacherProfile(
+    accountId: string,
+    data: { organization?: string; bio?: string },
+  ) {
+    const teacher = await this.teacherProfileRepository.findOne({
+      where: { accountId },
+    });
+    if (!teacher) throw new NotFoundException('Teacher profile not found');
+    if (data.organization !== undefined)
+      teacher.organization = data.organization || null;
+    if (data.bio !== undefined) teacher.bio = data.bio || null;
+    await this.teacherProfileRepository.save(teacher);
+    return this.formatTeacher(teacher);
+  }
+
+  // ─── Internal lookups (system) ────────────────────────────────────────────
+
+  /** Display info for a set of learner_profiles.id — used by classroom-service gradebooks. */
+  async getLearnersByIds(ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))].slice(0, 500);
+    if (unique.length === 0) return [];
+    const learners = await this.learnerProfileRepository.find({
+      where: { id: In(unique) },
+      relations: ['account'],
+    });
+    return learners.map((l) => ({
+      id: l.id,
+      accountId: l.accountId,
+      email: l.account?.email ?? null,
+      fullName: l.account?.fullName ?? null,
+      avatarUrl: l.account?.avatarUrl ?? null,
+      currentLevel: l.currentLevel,
+      status: l.account?.status ?? null,
+    }));
+  }
+
+  async getTeachersByIds(ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))].slice(0, 200);
+    if (unique.length === 0) return [];
+    const teachers = await this.teacherProfileRepository.find({
+      where: { id: In(unique) },
+      relations: ['account'],
+    });
+    return teachers.map((t) => this.formatTeacher(t));
   }
 }

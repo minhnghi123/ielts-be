@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { LearnerProfile } from './learner-profile.entity';
 import { AdminProfile } from './admin-profile.entity';
+import { TeacherProfile } from './teacher-profile.entity';
 
 @Entity('accounts')
 export class Account {
@@ -41,4 +42,7 @@ export class Account {
 
   @OneToOne(() => AdminProfile, (admin) => admin.account)
   adminProfile: AdminProfile;
+
+  @OneToOne(() => TeacherProfile, (teacher) => teacher.account)
+  teacherProfile: TeacherProfile;
 }

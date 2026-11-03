@@ -6,7 +6,7 @@ export class CreateWritingGradingDto {
     @IsString()
     submissionId: string;
 
-    @ApiPropertyOptional({ description: 'AI model name (e.g. llama-3.3-70b-versatile)' })
+    @ApiPropertyOptional({ description: 'AI model name (e.g. openai/gpt-oss-120b)' })
     @IsOptional()
     @IsString()
     modelName?: string;

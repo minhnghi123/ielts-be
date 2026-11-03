@@ -14,7 +14,15 @@ import {
 import { AuthServiceService } from './auth-service.service';
 import { RegisterLearnerDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ChangePasswordDto, UpdateUserStatusDto } from './dto/change-password.dto';
+import {
+  ChangePasswordDto,
+  UpdateUserStatusDto,
+} from './dto/change-password.dto';
+import {
+  UpdateTeacherApprovalDto,
+  UpdateTeacherProfileDto,
+  UpdateUserRoleDto,
+} from './dto/teacher.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '@app/common';
 import {
@@ -27,10 +35,13 @@ import {
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthServiceController {
-  constructor(private readonly authService: AuthServiceService) { }
+  constructor(private readonly authService: AuthServiceService) {}
 
   @Post('register')
-  @ApiOperation({ summary: 'Register a new learner account' })
+  @ApiOperation({
+    summary:
+      'Register a new learner (default) or teacher account (pending approval)',
+  })
   @ApiResponse({ status: 201, description: 'Account successfully created' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   async register(@Body() registerDto: RegisterLearnerDto) {
@@ -47,7 +58,10 @@ export class AuthServiceController {
 
   @Post('google')
   @ApiOperation({ summary: 'Login using Google OAuth access token' })
-  @ApiResponse({ status: 200, description: 'Successfully logged in via Google' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully logged in via Google',
+  })
   @ApiResponse({ status: 401, description: 'Invalid token' })
   async googleLogin(@Body('access_token') accessToken: string) {
     return this.authService.googleLogin(accessToken);
@@ -57,7 +71,10 @@ export class AuthServiceController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'User profile retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user.sub);
@@ -98,7 +115,7 @@ export class AuthServiceController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
-    @Query('role') role?: 'learner' | 'admin',
+    @Query('role') role?: 'learner' | 'teacher' | 'admin',
     @Query('status') status?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
@@ -116,6 +133,117 @@ export class AuthServiceController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserStatusDto,
   ) {
-    return this.authService.updateUserStatus(id, dto.status, req.headers['x-user-id']);
+    return this.authService.updateUserStatus(
+      id,
+      dto.status,
+      req.headers['x-user-id'],
+    );
+  }
+
+  @Patch('users/:id/role')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Promote a learner to teacher or demote a teacher (Admin only)',
+  })
+  async updateUserRole(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserRoleDto,
+  ) {
+    return this.authService.updateUserRole(
+      id,
+      dto.role,
+      (req.headers['x-user-id'] as string) ?? null,
+      dto.organization,
+    );
+  }
+
+  // ─── Admin: teacher approval ──────────────────────────────────────────────
+
+  @Get('teachers')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'List teacher accounts, optionally by approval status (Admin only)',
+  })
+  async getTeachers(
+    @Query('approval') approval?: 'pending' | 'approved' | 'rejected',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.authService.getTeachers(
+      approval,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      search,
+    );
+  }
+
+  @Patch('teachers/:id/approval')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve or reject a teacher account (Admin only)' })
+  async updateTeacherApproval(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTeacherApprovalDto,
+  ) {
+    return this.authService.updateTeacherApproval(
+      id,
+      dto.status,
+      (req.headers['x-user-id'] as string) ?? null,
+      dto.reason,
+    );
+  }
+
+  // ─── Teacher: own profile ─────────────────────────────────────────────────
+
+  @Put('teacher-profile')
+  @UseGuards(RolesGuard)
+  @Roles('teacher')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update organization / bio of the signed-in teacher',
+  })
+  async updateTeacherProfile(
+    @Request() req,
+    @Body() dto: UpdateTeacherProfileDto,
+  ) {
+    return this.authService.updateTeacherProfile(
+      req.headers['x-user-id'] as string,
+      dto,
+    );
+  }
+
+  // ─── Internal (system) lookups used by other services ─────────────────────
+
+  @Get('internal/learners')
+  @UseGuards(RolesGuard)
+  @Roles('system', 'admin')
+  @ApiOperation({
+    summary: 'Resolve learner display info by learner_profiles.id (internal)',
+  })
+  async getLearnersByIds(@Query('ids') ids?: string) {
+    return this.authService.getLearnersByIds(
+      (ids ?? '').split(',').map((s) => s.trim()),
+    );
+  }
+
+  @Get('internal/teachers')
+  @UseGuards(RolesGuard)
+  @Roles('system', 'admin')
+  @ApiOperation({
+    summary: 'Resolve teacher info by teacher_profiles.id (internal)',
+  })
+  async getTeachersByIds(@Query('ids') ids?: string) {
+    return this.authService.getTeachersByIds(
+      (ids ?? '').split(',').map((s) => s.trim()),
+    );
   }
 }

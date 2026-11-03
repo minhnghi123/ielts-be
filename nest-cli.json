@@ -63,6 +63,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/common/tsconfig.lib.json"
       }
+    },
+    "classroom-service": {
+      "type": "application",
+      "root": "apps/classroom-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/classroom-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/classroom-service/tsconfig.app.json"
+      }
     }
   }
 }

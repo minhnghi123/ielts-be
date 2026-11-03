@@ -5,7 +5,7 @@ export class AiWritingGrading {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'submission_id' })
+    @Column({ name: 'submission_id', type: 'uuid' })
     submissionId: string;
 
     @Column({ name: 'model_name', type: 'varchar', length: 100, nullable: true })

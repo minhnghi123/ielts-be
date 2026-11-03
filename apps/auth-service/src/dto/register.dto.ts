@@ -4,6 +4,9 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  IsOptional,
+  IsIn,
+  IsString,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -37,4 +40,31 @@ export class RegisterLearnerDto {
   })
   @IsNotEmpty()
   confirmPassword: string;
+
+  @ApiProperty({
+    enum: ['learner', 'teacher'],
+    required: false,
+    default: 'learner',
+  })
+  @IsOptional()
+  @IsIn(['learner', 'teacher'])
+  role?: 'learner' | 'teacher';
+
+  @ApiProperty({
+    required: false,
+    description: 'Display name (recommended for teachers)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  fullName?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'School / centre (teachers only)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  organization?: string;
 }
