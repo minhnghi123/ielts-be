@@ -1,3 +1,7 @@
+import { KcRating } from './mastery/kc-rating.entity';
+import { SavedWord } from './mastery/saved-word.entity';
+import { MasteryController } from './mastery/mastery.controller';
+import { MasteryService } from './mastery/mastery.service';
 import { StudyTask } from './plan/study-task.entity';
 import { PlanController } from './plan/plan.controller';
 import { PlanService } from './plan/plan.service';
@@ -53,9 +57,11 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
             LearnerMistake,
             LearnerProgressSnapshot,
             StudyTask,
+            KcRating,
+            SavedWord,
         ]),
     ],
-    controllers: [AnalyticsServiceController, PlanController],
-    providers: [AnalyticsServiceService, PlanService],
+    controllers: [AnalyticsServiceController, PlanController, MasteryController],
+    providers: [AnalyticsServiceService, PlanService, MasteryService],
 })
 export class AnalyticsServiceModule { }

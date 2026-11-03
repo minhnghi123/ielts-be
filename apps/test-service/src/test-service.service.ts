@@ -1692,6 +1692,34 @@ export class TestServiceService {
       );
     }
 
+    // Elo mastery per question type: every answered question moves the learner's
+    // rating on that type and the question's own difficulty.
+    try {
+      const all = await this.questionRepo.find({
+        where: { id: In(orderedQuestionIds) },
+        select: ['id', 'questionType'],
+      });
+      const typeById = new Map(all.map((q) => [q.id, q.questionType]));
+      const items = orderedQuestionIds
+        .filter((id) => typeById.has(id))
+        .map((questionId) => ({
+          questionId,
+          kc: typeById.get(questionId) ?? null,
+          correct: !wrongDetails.has(questionId),
+        }));
+      if (items.length > 0) {
+        await fetch(`${baseUrl}/analytics/kc/rate`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ learnerId, skill, items }),
+        });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update KC ratings for attempt ${attempt.id}: ${String(error)}`,
+      );
+    }
+
     if (wrongQuestionIds.length === 0) return;
 
     try {
