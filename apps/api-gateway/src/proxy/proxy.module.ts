@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ProxyService } from './proxy.service';
+import { HealthController } from '../health.controller';
 import { AuthProxyController } from './auth.proxy.controller';
 import { TestProxyController } from './test.proxy.controller';
 import { SubmissionProxyController } from './submission.proxy.controller';
@@ -14,6 +15,7 @@ import { AnalyticsProxyController } from './analytics.proxy.controller';
         }),
     ],
     controllers: [
+        HealthController,
         AuthProxyController,
         TestProxyController,
         SubmissionProxyController,

@@ -2,11 +2,18 @@ import {
     Injectable,
     NotFoundException,
     BadRequestException,
+    ConflictException,
     Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, DataSource } from 'typeorm';
-import { Test } from './entities/test.entity';
+import { Repository, FindOptionsWhere, DataSource, ILike } from 'typeorm';
+import { Test, SKILL_DEFAULT_DURATION_MINUTES } from './entities/test.entity';
+import {
+    RequestUser,
+    USER_HEADERS,
+    assertOwnerOrPrivileged,
+    isPrivileged,
+} from '@app/common';
 import { Section } from './entities/section.entity';
 import { QuestionGroup } from './entities/question-group.entity';
 import { Question } from './entities/question.entity';
@@ -15,7 +22,7 @@ import { WritingTask } from './entities/writing-task.entity';
 import { SpeakingPart } from './entities/speaking-part.entity';
 import { TestAttempt } from './entities/test-attempt.entity';
 import { QuestionAttempt } from './entities/question-attempt.entity';
-import { SubmitTestAttemptDto } from './dto/submit-test.dto';
+import { SubmitTestAttemptDto, StartAttemptDto, AiFeedbackDto } from './dto/submit-test.dto';
 import { CreateTestDto } from './dto/create-test.dto';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -55,12 +62,17 @@ export class TestServiceService {
 
     // ─── Tests ───────────────────────────────────────────────────────────────────
 
-    async getTests(query: QueryTestsDto) {
-        const { skill, isMock, page, limit } = query;
+    async getTests(query: QueryTestsDto, includeUnpublished = false) {
+        const { skill, isMock, difficulty, status, search, page, limit } = query;
         const where: FindOptionsWhere<Test> = {};
         if (skill) where.skill = skill as any;
         if (isMock !== undefined) where.isMock = isMock;
-        console.log(typeof page, typeof limit);
+        if (difficulty) where.difficulty = difficulty as any;
+        if (search) where.title = ILike(`%${search}%`);
+        // Learners only ever see published tests; admins may filter by any status.
+        where.status = includeUnpublished ? ((status as any) ?? undefined) : 'published';
+        if (where.status === undefined) delete where.status;
+
         const [data, total] = await this.testRepo.findAndCount({
             where,
             order: { createdAt: 'DESC' },
@@ -69,7 +81,7 @@ export class TestServiceService {
         });
 
         return {
-            data,
+            data: data.map((t) => ({ ...t, durationMinutes: this.resolveDurationMinutes(t) })),
             total,
             page,
             limit,
@@ -77,7 +89,12 @@ export class TestServiceService {
         };
     }
 
-    async getTestById(id: string) {
+    /** Official duration unless the admin overrode it on the test. */
+    resolveDurationMinutes(test: Pick<Test, 'skill' | 'durationMinutes'>): number {
+        return test.durationMinutes ?? SKILL_DEFAULT_DURATION_MINUTES[test.skill] ?? 60;
+    }
+
+    async getTestById(id: string, opts: { includeAnswers?: boolean } = {}): Promise<Test> {
         // Step 1: fetch the test's skill first (lightweight)
         const meta = await this.testRepo.findOne({ where: { id }, select: ['id', 'skill'] });
         if (!meta) throw new NotFoundException(`Test #${id} not found`);
@@ -91,9 +108,12 @@ export class TestServiceService {
                 'sections',
                 'sections.questionGroups',
                 'sections.questionGroups.questions',
-                'sections.questionGroups.questions.answer',
             );
-            order['sections'] = { sectionOrder: 'ASC' };
+            if (opts.includeAnswers) relations.push('sections.questionGroups.questions.answer');
+            order['sections'] = {
+                sectionOrder: 'ASC',
+                questionGroups: { groupOrder: 'ASC', questions: { questionOrder: 'ASC' } },
+            };
         } else if (meta.skill === 'writing') {
             relations.push('writingTasks');
             order['writingTasks'] = { taskNumber: 'ASC' };
@@ -104,6 +124,20 @@ export class TestServiceService {
 
         const test = await this.testRepo.findOne({ where: { id }, relations, order });
         if (!test) throw new NotFoundException(`Test #${id} not found`);
+        (test as any).durationMinutes = this.resolveDurationMinutes(test);
+        return opts.includeAnswers ? test : this.stripAnswerKey(test);
+    }
+
+    /** Remove everything a candidate must not see while the test is live. */
+    private stripAnswerKey(test: Test): Test {
+        for (const section of test.sections ?? []) {
+            for (const group of section.questionGroups ?? []) {
+                for (const q of group.questions ?? []) {
+                    delete (q as any).answer;
+                    delete (q as any).explanation;
+                }
+            }
+        }
         return test;
     }
 
@@ -618,15 +652,103 @@ export class TestServiceService {
         }
     }
 
-    // ─── Test Attempts (Joining & Submitting) ──────────────────────────────────
+    // ─── Test Attempts (server-side exam session) ───────────────────────────────
 
-    async startAttempt(testId: string, learnerId: string): Promise<TestAttempt> {
-        const test = await this.getTestById(testId);
+    /** Seconds of tolerance for network latency before a late submission counts as expired. */
+    private static readonly SUBMIT_GRACE_SECONDS = 30;
+
+    async startAttempt(testId: string, learnerId: string, dto: StartAttemptDto = {}): Promise<TestAttempt> {
+        const test = await this.testRepo.findOne({ where: { id: testId } });
+        if (!test) throw new NotFoundException(`Test #${testId} not found`);
+        if (test.status !== 'published') {
+            throw new BadRequestException('This test is not available');
+        }
+
+        // One live attempt per learner per test — resume instead of duplicating.
+        const open = await this.findOpenAttempt(testId, learnerId);
+        if (open) return this.decorateAttempt(open);
+
+        const officialMinutes = this.resolveDurationMinutes(test);
+        const isPractice = !test.isMock && dto.durationMinutes !== undefined && dto.durationMinutes !== officialMinutes;
+        const minutes = isPractice ? (dto.durationMinutes as number) : officialMinutes;
+        const durationSeconds = minutes * 60;
+        const now = new Date();
+
         const attempt = this.attemptRepo.create({
             testId: test.id,
             learnerId,
+            status: 'in_progress',
+            durationSeconds,
+            expiresAt: new Date(now.getTime() + durationSeconds * 1000),
+            draftAnswers: {},
+            isPractice,
         });
-        return this.attemptRepo.save(attempt);
+        const saved = await this.attemptRepo.save(attempt);
+        return this.decorateAttempt(saved);
+    }
+
+    private async findOpenAttempt(testId: string, learnerId: string): Promise<TestAttempt | null> {
+        const open = await this.attemptRepo.findOne({
+            where: { testId, learnerId, status: 'in_progress' },
+            order: { startedAt: 'DESC' },
+        });
+        if (!open) return null;
+        if (this.isPastDeadline(open)) {
+            await this.finalizeExpired(open);
+            return null;
+        }
+        return open;
+    }
+
+    async getActiveAttempt(testId: string, learnerId: string): Promise<TestAttempt> {
+        const open = await this.findOpenAttempt(testId, learnerId);
+        if (!open) throw new NotFoundException('No attempt in progress for this test');
+        return this.decorateAttempt(open);
+    }
+
+    private isPastDeadline(attempt: TestAttempt, graceSeconds = 0): boolean {
+        if (!attempt.expiresAt) return false;
+        return Date.now() > attempt.expiresAt.getTime() + graceSeconds * 1000;
+    }
+
+    /** Attach `remainingSeconds` so clients can mirror the authoritative timer. */
+    private decorateAttempt<T extends TestAttempt>(attempt: T): T & { remainingSeconds: number | null } {
+        const remainingSeconds =
+            attempt.status === 'in_progress' && attempt.expiresAt
+                ? Math.max(0, Math.floor((attempt.expiresAt.getTime() - Date.now()) / 1000))
+                : attempt.status === 'in_progress' ? null : 0;
+        return Object.assign(attempt, { remainingSeconds });
+    }
+
+    /** Deadline passed without a submission → grade whatever was autosaved. */
+    private async finalizeExpired(attempt: TestAttempt): Promise<TestAttempt> {
+        const answers = Object.entries(attempt.draftAnswers ?? {}).map(([questionId, answer]) => ({
+            questionId,
+            answer,
+        }));
+        return this.gradeAndClose(attempt, answers, 'expired');
+    }
+
+    async saveDraft(
+        attemptId: string,
+        answers: Record<string, string>,
+        user: RequestUser | null,
+    ): Promise<{ savedAt: Date; remainingSeconds: number | null }> {
+        const attempt = await this.attemptRepo.findOne({ where: { id: attemptId } });
+        if (!attempt) throw new NotFoundException(`TestAttempt #${attemptId} not found`);
+        assertOwnerOrPrivileged(user, attempt.learnerId);
+
+        if (attempt.status !== 'in_progress') {
+            throw new ConflictException('This attempt has already been submitted');
+        }
+        if (this.isPastDeadline(attempt, TestServiceService.SUBMIT_GRACE_SECONDS)) {
+            await this.finalizeExpired(attempt);
+            throw new ConflictException('Time is up — the attempt was submitted automatically');
+        }
+
+        const savedAt = new Date();
+        await this.attemptRepo.update(attempt.id, { draftAnswers: answers, lastSavedAt: savedAt });
+        return { savedAt, remainingSeconds: this.decorateAttempt(attempt).remainingSeconds };
     }
 
     async getAttemptById(attemptId: string): Promise<TestAttempt> {
@@ -643,6 +765,30 @@ export class TestServiceService {
         return attempt;
     }
 
+    /**
+     * Learner-facing read. While the attempt is live the answer key is withheld;
+     * after submission the full review (correct answers + explanations) is returned.
+     */
+    async getAttemptForUser(attemptId: string, user: RequestUser | null): Promise<TestAttempt> {
+        let attempt = await this.getAttemptById(attemptId);
+        assertOwnerOrPrivileged(user, attempt.learnerId);
+
+        if (attempt.status === 'in_progress' && this.isPastDeadline(attempt, TestServiceService.SUBMIT_GRACE_SECONDS)) {
+            await this.finalizeExpired(attempt);
+            attempt = await this.getAttemptById(attemptId);
+        }
+
+        if (attempt.status === 'in_progress' && !isPrivileged(user)) {
+            for (const qa of attempt.questionAttempts ?? []) {
+                if (qa.question) {
+                    delete (qa.question as any).answer;
+                    delete (qa.question as any).explanation;
+                }
+            }
+        }
+        return this.decorateAttempt(attempt);
+    }
+
     async getAttemptsByLearnerId(learnerId: string): Promise<TestAttempt[]> {
         return this.attemptRepo.find({
             where: { learnerId },
@@ -651,9 +797,36 @@ export class TestServiceService {
         });
     }
 
-    /** Save (or update) the AI-generated feedback text for one attempt. */
-    async saveAiFeedback(attemptId: string, aiFeedback: string): Promise<void> {
-        await this.attemptRepo.update({ id: attemptId }, { aiFeedback });
+    /**
+     * Internal: store the AI band/feedback for Writing & Speaking. Only trusted
+     * server code (gateway role `system`) or an admin can reach this.
+     */
+    async saveAiFeedback(attemptId: string, dto: AiFeedbackDto): Promise<void> {
+        const attempt = await this.attemptRepo.findOne({ where: { id: attemptId }, relations: ['test'] });
+        if (!attempt) throw new NotFoundException(`TestAttempt #${attemptId} not found`);
+
+        const patch: Partial<TestAttempt> = {};
+        if (dto.aiFeedback !== undefined) patch.aiFeedback = dto.aiFeedback;
+        if (dto.rawScore !== undefined) patch.rawScore = dto.rawScore;
+        if (dto.bandScore !== undefined) {
+            if (['reading', 'listening'].includes(attempt.test?.skill)) {
+                throw new BadRequestException('Reading/Listening bands are computed by the server');
+            }
+            patch.bandScore = this.roundToHalfBand(dto.bandScore);
+        }
+        if (Object.keys(patch).length === 0) return;
+
+        await this.attemptRepo.update({ id: attemptId }, patch);
+
+        if (dto.bandScore !== undefined) {
+            const updated = await this.getAttemptById(attemptId);
+            await this.syncAnalyticsAfterSubmit(updated, []);
+        }
+    }
+
+    /** IELTS bands are reported in 0.5 steps. */
+    roundToHalfBand(value: number): number {
+        return Math.min(9, Math.max(0, Math.round(value * 2) / 2));
     }
 
     // ─── Answer grading helpers ─────────────────────────────────────────────────
@@ -805,98 +978,124 @@ export class TestServiceService {
         return tfngAliases[step1] ?? step1;
     }
 
-    async submitAttempt(attemptId: string, dto: SubmitTestAttemptDto): Promise<TestAttempt> {
-        const attempt = await this.getAttemptById(attemptId);
-        if (attempt.submittedAt) {
-            throw new BadRequestException('This attempt has already been submitted');
-        }
+    async submitAttempt(
+        attemptId: string,
+        dto: SubmitTestAttemptDto,
+        user: RequestUser | null = null,
+    ): Promise<TestAttempt> {
+        const attempt = await this.attemptRepo.findOne({ where: { id: attemptId }, relations: ['test'] });
+        if (!attempt) throw new NotFoundException(`TestAttempt #${attemptId} not found`);
+        assertOwnerOrPrivileged(user, attempt.learnerId);
 
+        if (attempt.status !== 'in_progress' || attempt.submittedAt) {
+            throw new ConflictException('This attempt has already been submitted');
+        }
         if (!attempt.test) {
             throw new NotFoundException(`Test for attempt #${attemptId} not found`);
         }
 
-        const isAutoGraded = ['reading', 'listening'].includes(attempt.test.skill);
+        // Late submission (beyond the grace window) → the autosaved draft is what counts.
+        const late = this.isPastDeadline(attempt, TestServiceService.SUBMIT_GRACE_SECONDS);
+        const answers = late || !dto.answers?.length
+            ? Object.entries(attempt.draftAnswers ?? {}).map(([questionId, answer]) => ({ questionId, answer }))
+            : dto.answers;
+
+        return this.gradeAndClose(attempt, answers, late ? 'expired' : 'submitted');
+    }
+
+    /** Grade (Reading/Listening) and persist the final state of an attempt. */
+    private async gradeAndClose(
+        attempt: TestAttempt,
+        answers: { questionId: string; answer?: string }[],
+        finalStatus: 'submitted' | 'expired',
+    ): Promise<TestAttempt> {
+        if (!attempt.test) {
+            attempt.test = (await this.testRepo.findOne({ where: { id: attempt.testId } })) as Test;
+        }
+        const skill = attempt.test?.skill;
+        const isAutoGraded = ['reading', 'listening'].includes(skill);
+        const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
         let rawScore = 0;
         let bandScore: number | null = null;
         const wrongQuestionIds: string[] = [];
-
         const questionAttempts: QuestionAttempt[] = [];
 
-        for (const answerDto of dto.answers) {
-            // Default: null means "not graded / not applicable"
+        // Grade against every question of the test so skipped questions count as wrong.
+        const questionIds = isAutoGraded
+            ? await this.getQuestionIdsForTest(attempt.testId)
+            : answers.map((a) => a.questionId).filter((id) => uuidRe.test(id));
+        const answerById = new Map(answers.map((a) => [a.questionId, a.answer ?? '']));
+        const keyById = new Map(
+            (await this.getAnswersForQuestions(questionIds)).map((k) => [k.questionId, k]),
+        );
+
+        for (const questionId of questionIds) {
+            const given = answerById.get(questionId) ?? '';
             let isCorrect: boolean | null = null;
 
             if (isAutoGraded) {
-                const trimmedAnswer = answerDto.answer?.trim() ?? '';
-
-                if (!trimmedAnswer) {
-                    // Skipped — no answer provided, counts as wrong for scoring
+                const trimmed = given.trim();
+                const key = keyById.get(questionId);
+                if (!trimmed || !key) {
                     isCorrect = false;
                 } else {
-                    const questionAnswer = await this.answerRepo.findOne({
-                        where: { questionId: answerDto.questionId },
-                    });
-
-                    if (!questionAnswer) {
-                        // No answer record in DB — treat as wrong (conservative)
-                        isCorrect = false;
-                    } else {
-                        // Expand every stored template into all acceptable forms
-                        const acceptable = this.buildAcceptableAnswers(
-                            questionAnswer.correctAnswers,
-                            questionAnswer.caseSensitive,
-                        );
-
-                        // Normalise the user's input (incl. TFNG alias resolution)
-                        const normalisedInput = this.normaliseInput(
-                            trimmedAnswer,
-                            questionAnswer.caseSensitive,
-                        );
-
-                        isCorrect = acceptable.has(normalisedInput);
-                        if (isCorrect) rawScore++;
-                        if (isCorrect === false) wrongQuestionIds.push(answerDto.questionId);
-                    }
+                    const acceptable = this.buildAcceptableAnswers(key.correctAnswers, key.caseSensitive);
+                    isCorrect = acceptable.has(this.normaliseInput(trimmed, key.caseSensitive));
                 }
+                if (isCorrect) rawScore++;
+                else wrongQuestionIds.push(questionId);
             }
 
-            const attemptData: Partial<QuestionAttempt> = {
-                testAttemptId: attemptId,
-                questionId: answerDto.questionId,
-                answer: answerDto.answer ?? '',
-                answeredAt: new Date(),
-                isCorrect: isCorrect ?? null,
-            };
-
-            const newAttempt = this.questionAttemptRepo.create(attemptData as unknown as Partial<QuestionAttempt>);
-            questionAttempts.push(newAttempt);
+            questionAttempts.push(
+                this.questionAttemptRepo.create({
+                    testAttemptId: attempt.id,
+                    questionId,
+                    answer: given,
+                    answeredAt: new Date(),
+                    isCorrect,
+                } as Partial<QuestionAttempt>),
+            );
         }
 
         if (questionAttempts.length > 0) {
+            // Replace any rows from a previous (interrupted) grading of this attempt.
+            await this.questionAttemptRepo.delete({ testAttemptId: attempt.id });
             await this.questionAttemptRepo.save(questionAttempts);
         }
 
         if (isAutoGraded) {
-            bandScore = attempt.test.skill === 'listening'
+            bandScore = skill === 'listening'
                 ? this.calculateListeningBand(rawScore)
                 : this.calculateReadingBand(rawScore);
-        } else if (dto.bandScore !== undefined) {
-            bandScore = dto.bandScore;
         }
 
-        // Use update() instead of save() to avoid TypeORM cascade wiping questionAttempts
         const updatePayload: Partial<TestAttempt> = {
             submittedAt: new Date(),
-            rawScore,
+            status: finalStatus,
+            rawScore: isAutoGraded ? rawScore : attempt.rawScore,
+            draftAnswers: Object.fromEntries(answers.map((a) => [a.questionId, a.answer ?? ''])),
         };
-        if (bandScore !== null) {
-            updatePayload.bandScore = bandScore;
-        }
+        if (bandScore !== null) updatePayload.bandScore = bandScore;
         await this.attemptRepo.update(attempt.id, updatePayload);
 
-        const submittedAttempt = await this.getAttemptById(attempt.id);
-        await this.syncAnalyticsAfterSubmit(submittedAttempt, [...new Set(wrongQuestionIds)]);
-        return submittedAttempt;
+        const submitted = await this.getAttemptById(attempt.id);
+        await this.syncAnalyticsAfterSubmit(submitted, [...new Set(wrongQuestionIds)]);
+        return this.decorateAttempt(submitted);
+    }
+
+    private async getQuestionIdsForTest(testId: string): Promise<string[]> {
+        const rows = await this.questionRepo
+            .createQueryBuilder('q')
+            .innerJoin('q.questionGroup', 'g')
+            .innerJoin('g.section', 's')
+            .where('s.testId = :testId', { testId })
+            .orderBy('s.sectionOrder', 'ASC')
+            .addOrderBy('g.groupOrder', 'ASC')
+            .addOrderBy('q.questionOrder', 'ASC')
+            .select(['q.id'])
+            .getMany();
+        return rows.map((r) => r.id);
     }
 
     private async syncAnalyticsAfterSubmit(
@@ -909,6 +1108,11 @@ export class TestServiceService {
         const baseUrl = process.env.ANALYTICS_SERVICE_URL || 'http://localhost:5004';
         const learnerId = attempt.learnerId;
         const skill = attempt.test?.skill;
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            [USER_HEADERS.ROLE]: 'system',
+        };
+        if (process.env.INTERNAL_API_KEY) headers[USER_HEADERS.INTERNAL_KEY] = process.env.INTERNAL_API_KEY;
 
         try {
             const upserts: Promise<Response>[] = [];
@@ -916,7 +1120,7 @@ export class TestServiceService {
                 upserts.push(
                     fetch(`${baseUrl}/analytics/band-profiles`, {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers,
                         body: JSON.stringify({
                             learnerId,
                             skill,
@@ -929,7 +1133,7 @@ export class TestServiceService {
             upserts.push(
                 fetch(`${baseUrl}/analytics/band-profiles`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         learnerId,
                         skill: 'overall',
@@ -938,7 +1142,7 @@ export class TestServiceService {
                 }),
                 fetch(`${baseUrl}/analytics/progress/snapshot`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         learnerId,
                         overallBand: band,
@@ -960,7 +1164,7 @@ export class TestServiceService {
                 wrongQuestionIds.map((questionId) =>
                     fetch(`${baseUrl}/analytics/mistakes`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers,
                         body: JSON.stringify({
                             learnerId,
                             questionId,

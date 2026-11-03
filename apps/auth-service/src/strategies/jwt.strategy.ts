@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthServiceService } from '../auth-service.service';
+import { requireJwtSecret } from '../jwt-secret';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -9,7 +10,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
+      secretOrKey: requireJwtSecret(),
     });
   }
 
@@ -18,6 +19,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user) {
       throw new UnauthorizedException();
+    }
+    if (user.status !== 'active') {
+      throw new UnauthorizedException('Account is suspended');
     }
 
     return {

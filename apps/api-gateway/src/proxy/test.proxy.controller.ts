@@ -8,6 +8,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
  *   /api/tests/*      → test-service /tests/*
  *   /api/sections/*   → test-service /sections/*
  *   /api/questions/*  → test-service /questions/*
+ *   /api/attempts/*   → test-service /attempts/*  (attempt lifecycle: start, autosave, submit, review)
  */
 @ApiTags('Tests (Proxy)')
 @Controller('api')

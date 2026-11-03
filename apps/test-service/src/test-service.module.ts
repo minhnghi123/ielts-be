@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
+import { APP_GUARD } from '@nestjs/core';
+import { RolesGuard } from '@app/common';
 import { TestServiceController } from './test-service.controller';
 import { TestServiceService } from './test-service.service';
 import { DocxParserService } from './import/docx-parser.service';
@@ -74,6 +76,11 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
     MulterModule.register({ limits: { fileSize: 50 * 1024 * 1024 } }),
   ],
   controllers: [TestServiceController],
-  providers: [TestServiceService, DocxParserService, ImportTestService],
+  providers: [
+    TestServiceService,
+    DocxParserService,
+    ImportTestService,
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class TestServiceModule { }

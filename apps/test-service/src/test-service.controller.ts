@@ -22,7 +22,15 @@ import {
   AnyFilesInterceptor,
 } from '@nestjs/platform-express';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { RMQ_PATTERNS } from '@app/common';
+import {
+  RMQ_PATTERNS,
+  CurrentUser,
+  Roles,
+  Public,
+  resolveLearnerId,
+  isPrivileged,
+} from '@app/common';
+import type { RequestUser } from '@app/common';
 import { TestServiceService } from './test-service.service';
 import { ImportTestService } from './import/import-test.service';
 import { CreateTestDto } from './dto/create-test.dto';
@@ -35,7 +43,12 @@ import { CreateWritingTestDto } from './dto/create-writing-test.dto';
 import { CreateSpeakingTestDto } from './dto/create-speaking-test.dto';
 import { QueryTestsDto } from './dto/query-tests.dto';
 import { CreateManualTestDto } from './dto/create-manual-test.dto';
-import { SubmitTestAttemptDto } from './dto/submit-test.dto';
+import {
+  SubmitTestAttemptDto,
+  StartAttemptDto,
+  SaveDraftDto,
+  AiFeedbackDto,
+} from './dto/submit-test.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -49,7 +62,9 @@ const DEFAULT_ADMIN_ID =
   process.env.ADMIN_PROFILE_ID as string;
 
 @ApiTags('Tests')
+@ApiBearerAuth()
 @Controller()
+@Roles('admin')
 export class TestServiceController {
   constructor(
     private readonly testService: TestServiceService,
@@ -120,22 +135,25 @@ export class TestServiceController {
   // ─── Tests ───────────────────────────────────────────────────────────────────
 
   @Get('tests')
+  @Public()
   @ApiOperation({
-    summary: 'List all tests with optional filters and pagination',
+    summary: 'List tests with filters and pagination (learners only see published tests)',
   })
   @ApiResponse({ status: 200, description: 'Paginated test list' })
-  getTests(@Query() query: QueryTestsDto) {
-    return this.testService.getTests(query);
+  getTests(@Query() query: QueryTestsDto, @CurrentUser() user: RequestUser | null) {
+    return this.testService.getTests(query, isPrivileged(user));
   }
 
   @Get('tests/:id')
+  @Public()
   @ApiOperation({
-    summary: 'Get a test by ID (with sections, questions, answers)',
+    summary:
+      'Get a test by ID. Answers and explanations are only included for admins — learners receive them on the attempt result.',
   })
-  @ApiResponse({ status: 200, description: 'Full test detail' })
+  @ApiResponse({ status: 200, description: 'Test detail' })
   @ApiResponse({ status: 404, description: 'Test not found' })
-  getTestById(@Param('id', ParseUUIDPipe) id: string) {
-    return this.testService.getTestById(id);
+  getTestById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: RequestUser | null) {
+    return this.testService.getTestById(id, { includeAnswers: isPrivileged(user) });
   }
 
   @Post('tests')
@@ -319,6 +337,7 @@ export class TestServiceController {
   // ─── Writing Tasks ────────────────────────────────────────────────────────────
 
   @Get('tests/:testId/writing-tasks')
+  @Roles('admin', 'learner')
   @ApiOperation({ summary: 'Get writing tasks for a test' })
   getWritingTasks(@Param('testId', ParseUUIDPipe) testId: string) {
     return this.testService.getWritingTasksByTestId(testId);
@@ -337,6 +356,7 @@ export class TestServiceController {
   // ─── Speaking Parts ──────────────────────────────────────────────────────────
 
   @Get('tests/:testId/speaking-parts')
+  @Roles('admin', 'learner')
   @ApiOperation({ summary: 'Get speaking parts for a test' })
   getSpeakingParts(@Param('testId', ParseUUIDPipe) testId: string) {
     return this.testService.getSpeakingPartsByTestId(testId);
@@ -353,53 +373,94 @@ export class TestServiceController {
   }
 
   // ─── Test Attempts ────────────────────────────────────────────────────────────
+  //
+  // Lifecycle (all state lives on the server):
+  //   POST  tests/:testId/attempts   → start (or resume the open attempt) → expiresAt
+  //   GET   attempts/active?testId=  → find the open attempt for the current learner
+  //   PUT   attempts/:id/draft       → autosave answers
+  //   POST  attempts/:id/submit      → grade R/L, close attempt
+  //   GET   attempts/:id             → in progress: no answers; submitted: full review
+  //   PUT   attempts/:id/ai-feedback → internal: store Writing/Speaking AI band
 
   @Post('tests/:testId/attempts')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Start a new attempt for a test' })
+  @Roles('learner', 'admin')
+  @ApiOperation({ summary: 'Start a new attempt (or return the unfinished one) for the current learner' })
   startAttempt(
     @Param('testId', ParseUUIDPipe) testId: string,
-    @Body('learnerId', ParseUUIDPipe) learnerId: string,
+    @Body() dto: StartAttemptDto,
+    @CurrentUser() user: RequestUser,
+    @Body('learnerId') legacyLearnerId?: string,
   ) {
-    return this.testService.startAttempt(testId, learnerId);
+    return this.testService.startAttempt(testId, resolveLearnerId(user, legacyLearnerId), dto);
+  }
+
+  @Get('attempts/active')
+  @Roles('learner', 'admin')
+  @ApiOperation({ summary: 'Get the in-progress attempt of the current learner for a test (404 if none)' })
+  getActiveAttempt(
+    @Query('testId', ParseUUIDPipe) testId: string,
+    @CurrentUser() user: RequestUser,
+    @Query('learnerId') legacyLearnerId?: string,
+  ) {
+    return this.testService.getActiveAttempt(testId, resolveLearnerId(user, legacyLearnerId));
+  }
+
+  @Put('attempts/:attemptId/draft')
+  @Roles('learner', 'admin')
+  @ApiOperation({ summary: 'Autosave answers of an in-progress attempt' })
+  saveDraft(
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+    @Body() dto: SaveDraftDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.testService.saveDraft(attemptId, dto.answers ?? {}, user);
   }
 
   @Post('attempts/:attemptId/submit')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Submit answers and complete an attempt' })
+  @Roles('learner', 'admin')
+  @ApiOperation({ summary: 'Submit answers and complete an attempt (Reading/Listening graded instantly)' })
   submitAttempt(
     @Param('attemptId', ParseUUIDPipe) attemptId: string,
     @Body() dto: SubmitTestAttemptDto,
+    @CurrentUser() user: RequestUser,
   ) {
-    return this.testService.submitAttempt(attemptId, dto);
+    return this.testService.submitAttempt(attemptId, dto, user);
   }
 
   @Get('attempts/:attemptId')
-  @ApiOperation({ summary: 'Get an attempt by ID (with question details & correct answers)' })
+  @Roles('learner', 'admin', 'system')
+  @ApiOperation({ summary: 'Get an attempt. Correct answers & explanations are included once submitted.' })
   @ApiResponse({ status: 200, description: 'Attempt details' })
   @ApiResponse({ status: 404, description: 'Attempt not found' })
-  getAttemptById(@Param('attemptId', ParseUUIDPipe) attemptId: string) {
-    return this.testService.getAttemptById(attemptId);
+  getAttemptById(
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.testService.getAttemptForUser(attemptId, user);
   }
 
   @Get('attempts')
-  @ApiOperation({ summary: 'Get all attempts for a learner' })
-  getAttemptsByLearnerId(@Query('learnerId') learnerId: string) {
-    return this.testService.getAttemptsByLearnerId(learnerId);
+  @Roles('learner', 'admin')
+  @ApiOperation({ summary: 'List attempts of the current learner (admins may pass ?learnerId=)' })
+  getAttemptsByLearnerId(
+    @CurrentUser() user: RequestUser,
+    @Query('learnerId') learnerId?: string,
+  ) {
+    return this.testService.getAttemptsByLearnerId(resolveLearnerId(user, learnerId));
   }
 
   @Put('attempts/:attemptId/ai-feedback')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Save AI-generated feedback for an attempt' })
+  @Roles('system', 'admin')
+  @ApiOperation({ summary: '[Internal] Store AI feedback and band score for a Writing/Speaking attempt' })
   @HttpCode(HttpStatus.NO_CONTENT)
   async saveAiFeedback(
     @Param('attemptId', ParseUUIDPipe) attemptId: string,
-    @Body('aiFeedback') aiFeedback: string,
+    @Body() dto: AiFeedbackDto,
   ) {
-    await this.testService.saveAiFeedback(attemptId, aiFeedback);
+    await this.testService.saveAiFeedback(attemptId, dto);
   }
 
-  // ─── Asynchronous Handlers (Message Broker RPC) ─────────────────────────────
+  // ─── RPC (RabbitMQ) ───────────────────────────────────────────────────────────
 
   @MessagePattern(RMQ_PATTERNS.TEST.GET_ANSWERS)
   async getAnswersForQuestions(@Payload() questionIds: string[]) {

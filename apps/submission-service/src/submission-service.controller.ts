@@ -11,10 +11,15 @@ import {
     Logger,
 } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
-import { RMQ_PATTERNS } from '@app/common';
+import {
+    RMQ_PATTERNS,
+    CurrentUser,
+    Roles,
+    assertOwnerOrPrivileged,
+    resolveLearnerId,
+} from '@app/common';
+import type { RequestUser } from '@app/common';
 import { SubmissionServiceService } from './submission-service.service';
-import { StartAttemptDto } from './dto/start-attempt.dto';
-import { SaveAnswerDto } from './dto/save-answer.dto';
 import { CreateWritingSubmissionDto } from './dto/create-writing-submission.dto';
 import { CreateSpeakingSubmissionDto } from './dto/create-speaking-submission.dto';
 import { CreateWritingGradingDto } from './dto/create-writing-grading.dto';
@@ -33,51 +38,17 @@ export class SubmissionServiceController {
 
     constructor(private readonly service: SubmissionServiceService) { }
 
-    // ─── Test Attempts ────────────────────────────────────────────────────────────
-
-    @Post('attempts')
-    @ApiOperation({ summary: 'Start a new test attempt' })
-    @ApiResponse({ status: 201, description: 'Attempt started' })
-    startAttempt(@Body() dto: StartAttemptDto) {
-        return this.service.startAttempt(dto);
-    }
-
-    @Post('attempts/:id/answers')
-    @ApiOperation({ summary: 'Save or update an answer during an attempt' })
-    saveAnswer(
-        @Param('id', ParseUUIDPipe) id: string,
-        @Body() dto: SaveAnswerDto,
-    ) {
-        return this.service.saveAnswer(id, dto);
-    }
-
-    @Post('attempts/:id/submit')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Submit attempt: auto-grades Reading/Listening, returns scores' })
-    @ApiResponse({ status: 200, description: 'Attempt submitted with band_score' })
-    submitAttempt(@Param('id', ParseUUIDPipe) id: string) {
-        return this.service.submitAttempt(id);
-    }
-
-    @Get('attempts/:id')
-    @ApiOperation({ summary: 'Get attempt detail with all question attempts' })
-    getAttempt(@Param('id', ParseUUIDPipe) id: string) {
-        return this.service.getAttempt(id);
-    }
-
-    @Get('learners/:learnerId/attempts')
-    @ApiOperation({ summary: "List a learner's test attempts" })
-    getAttemptsByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
-        return this.service.getAttemptsByLearner(learnerId);
-    }
+    // ─── Admin stats ──────────────────────────────────────────────────────────────
 
     @Get('stats/global')
+    @Roles('admin')
     @ApiOperation({ summary: 'Get global attempt statistics like average score' })
     getGlobalStats() {
         return this.service.getGlobalStats();
     }
 
     @Get('stats/recent-activity')
+    @Roles('admin')
     @ApiOperation({ summary: 'Get recent global test attempt activity' })
     getRecentActivity() {
         return this.service.getRecentActivity();
@@ -87,25 +58,29 @@ export class SubmissionServiceController {
 
     @Post('writing-submissions')
     @ApiOperation({ summary: 'Submit a writing essay (grading_status: pending)' })
-    createWritingSubmission(@Body() dto: CreateWritingSubmissionDto) {
-        return this.service.createWritingSubmission(dto);
+    createWritingSubmission(@Body() dto: CreateWritingSubmissionDto, @CurrentUser() user: RequestUser) {
+        return this.service.createWritingSubmission({ ...dto, learnerId: resolveLearnerId(user, dto.learnerId) });
     }
 
     @Get('writing-submissions/:id')
     @ApiOperation({ summary: 'Get writing submission with scores' })
-    getWritingSubmission(@Param('id', ParseUUIDPipe) id: string) {
-        return this.service.getWritingSubmission(id);
+    async getWritingSubmission(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: RequestUser) {
+        const sub = await this.service.getWritingSubmission(id);
+        assertOwnerOrPrivileged(user, sub.learnerId);
+        return sub;
     }
 
     @Get('learners/:learnerId/writing-submissions')
     @ApiOperation({ summary: "List a learner's writing submissions" })
-    getWritingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    getWritingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.getWritingSubmissionsByLearner(learnerId);
     }
 
     // ─── AI Writing Gradings ──────────────────────────────────────────────────────
 
     @Post('writing-gradings')
+    @Roles('system', 'admin')
     @ApiOperation({ summary: 'Save AI writing grading result' })
     @ApiResponse({ status: 201, description: 'Grading saved' })
     createWritingGrading(@Body() dto: CreateWritingGradingDto) {
@@ -114,13 +89,18 @@ export class SubmissionServiceController {
 
     @Get('writing-gradings/:id')
     @ApiOperation({ summary: 'Get AI writing grading by ID' })
-    getWritingGrading(@Param('id', ParseUUIDPipe) id: string) {
-        return this.service.getWritingGrading(id);
+    async getWritingGrading(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: RequestUser) {
+        const grading = await this.service.getWritingGrading(id);
+        const sub = await this.service.getWritingSubmission(grading.submissionId);
+        assertOwnerOrPrivileged(user, sub.learnerId);
+        return grading;
     }
 
     @Get('writing-gradings/by-submission/:submissionId')
     @ApiOperation({ summary: 'Get AI writing grading by submission ID' })
-    getWritingGradingBySubmission(@Param('submissionId', ParseUUIDPipe) submissionId: string) {
+    async getWritingGradingBySubmission(@Param('submissionId', ParseUUIDPipe) submissionId: string, @CurrentUser() user: RequestUser) {
+        const sub = await this.service.getWritingSubmission(submissionId);
+        assertOwnerOrPrivileged(user, sub.learnerId);
         return this.service.getWritingGradingBySubmission(submissionId);
     }
 
@@ -128,19 +108,22 @@ export class SubmissionServiceController {
 
     @Post('speaking-submissions')
     @ApiOperation({ summary: 'Submit a speaking recording (grading_status: pending)' })
-    createSpeakingSubmission(@Body() dto: CreateSpeakingSubmissionDto) {
-        return this.service.createSpeakingSubmission(dto);
+    createSpeakingSubmission(@Body() dto: CreateSpeakingSubmissionDto, @CurrentUser() user: RequestUser) {
+        return this.service.createSpeakingSubmission({ ...dto, learnerId: resolveLearnerId(user, dto.learnerId) });
     }
 
     @Get('speaking-submissions/:id')
     @ApiOperation({ summary: 'Get speaking submission with scores' })
-    getSpeakingSubmission(@Param('id', ParseUUIDPipe) id: string) {
-        return this.service.getSpeakingSubmission(id);
+    async getSpeakingSubmission(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: RequestUser) {
+        const sub = await this.service.getSpeakingSubmission(id);
+        assertOwnerOrPrivileged(user, sub.learnerId);
+        return sub;
     }
 
     @Get('learners/:learnerId/speaking-submissions')
     @ApiOperation({ summary: "List a learner's speaking submissions" })
-    getSpeakingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string) {
+    getSpeakingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
         return this.service.getSpeakingSubmissionsByLearner(learnerId);
     }
 

@@ -1,10 +1,11 @@
-import { IsUUID, IsString, IsNotEmpty } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateWritingSubmissionDto {
-    @ApiProperty({ description: 'UUID of the learner_profile' })
+    @ApiPropertyOptional({ description: 'Ignored for learners — derived from the token. Admins may set it.' })
     @IsString()
-    learnerId: string;
+    @IsOptional()
+    learnerId?: string;
 
     @ApiProperty({ description: 'UUID of the writing_task' })
     @IsString()

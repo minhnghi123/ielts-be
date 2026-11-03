@@ -153,7 +153,7 @@ async function bootstrap() {
     transport: Transport.RMQ,
     options: {
       urls: [process.env.RABBITMQ_URL],
-      queue: 'ielts_messages',
+      queue: RMQ_QUEUES.TEST, // one queue per service: ielts.test / ielts.submission / ielts.analytics
       queueOptions: { durable: true },
     },
   });

@@ -236,15 +236,27 @@ export class AuthServiceService {
     return this.validateUser(userId);
   }
 
-  async getUsers(page: number = 1, limit: number = 10, search?: string) {
+  async getUsers(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    role?: 'learner' | 'admin',
+    status?: string,
+  ) {
     const queryBuilder = this.accountRepository.createQueryBuilder('account')
       .leftJoinAndSelect('account.learnerProfile', 'learnerProfile')
       .leftJoinAndSelect('account.adminProfile', 'adminProfile')
       .orderBy('account.createdAt', 'DESC');
 
     if (search) {
-      queryBuilder.where('account.email ILIKE :search', { search: `%${search}%` });
+      queryBuilder.andWhere(
+        '(account.email ILIKE :search OR account.fullName ILIKE :search)',
+        { search: `%${search}%` },
+      );
     }
+    if (role === 'admin') queryBuilder.andWhere('adminProfile.id IS NOT NULL');
+    if (role === 'learner') queryBuilder.andWhere('adminProfile.id IS NULL');
+    if (status) queryBuilder.andWhere('account.status = :status', { status });
 
     const [accounts, total] = await queryBuilder
       .skip((page - 1) * limit)
@@ -274,6 +286,45 @@ export class AuthServiceService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async changePassword(
+    userId: string,
+    dto: { currentPassword: string; newPassword: string },
+  ) {
+    const account = await this.accountRepository.findOne({ where: { id: userId } });
+    if (!account) throw new NotFoundException('User not found');
+    if (!account.password) {
+      throw new UnauthorizedException(
+        'This account uses Google Sign-In and has no password to change.',
+      );
+    }
+    const ok = await bcrypt.compare(dto.currentPassword, account.password);
+    if (!ok) throw new UnauthorizedException('Current password is incorrect');
+    if (dto.currentPassword === dto.newPassword) {
+      throw new ConflictException('New password must differ from the current password');
+    }
+    account.password = await bcrypt.hash(dto.newPassword, 10);
+    await this.accountRepository.save(account);
+    return { message: 'Password changed successfully' };
+  }
+
+  async updateUserStatus(
+    targetId: string,
+    status: 'active' | 'suspended',
+    actingUserId?: string | string[],
+  ) {
+    if (actingUserId && actingUserId === targetId) {
+      throw new ConflictException('You cannot change the status of your own account');
+    }
+    const account = await this.accountRepository.findOne({
+      where: { id: targetId },
+      relations: ['adminProfile'],
+    });
+    if (!account) throw new NotFoundException('User not found');
+    account.status = status;
+    await this.accountRepository.save(account);
+    return this.validateUser(targetId);
   }
 
   async updateProfile(userId: string, updateData: { fullName?: string; avatarUrl?: string }) {

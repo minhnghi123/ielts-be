@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { RMQ_CLIENTS, RMQ_QUEUES, RolesGuard, rmqUrls } from '@app/common';
 import { SubmissionServiceController } from './submission-service.controller';
 import { SubmissionServiceService } from './submission-service.service';
 import { TestAttempt } from './entities/test-attempt.entity';
@@ -18,23 +20,21 @@ import { AiWritingGrading } from './entities/ai-writing-grading.entity';
             isGlobal: true,
             envFilePath: './apps/submission-service/.env',
         }),
-        ClientsModule.registerAsync([
-            {
-                name: 'RMQ_SERVICE',
+        ClientsModule.registerAsync(
+            [RMQ_CLIENTS.SUBMISSION, RMQ_CLIENTS.ANALYTICS].map((name) => ({
+                name,
                 imports: [ConfigModule],
                 inject: [ConfigService],
                 useFactory: (config: ConfigService) => ({
                     type: Transport.RMQ,
                     options: {
-                        urls: [config.get<string>('RABBITMQ_URL') || 'amqp://guest:guest@localhost:5672'],
-                        queue: 'ielts_messages',
-                        queueOptions: {
-                            durable: true,
-                        },
+                        urls: [config.get<string>('RABBITMQ_URL') || rmqUrls()[0]],
+                        queue: name === RMQ_CLIENTS.ANALYTICS ? RMQ_QUEUES.ANALYTICS : RMQ_QUEUES.SUBMISSION,
+                        queueOptions: { durable: true },
                     },
                 }),
-            },
-        ]),
+            })),
+        ),
         // Use forRootAsync so ConfigModule finishes loading BEFORE TypeORM reads env vars
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
@@ -82,6 +82,6 @@ import { AiWritingGrading } from './entities/ai-writing-grading.entity';
         ]),
     ],
     controllers: [SubmissionServiceController],
-    providers: [SubmissionServiceService],
+    providers: [SubmissionServiceService, { provide: APP_GUARD, useClass: RolesGuard }],
 })
 export class SubmissionServiceModule { }

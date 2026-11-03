@@ -9,11 +9,13 @@ RabbitMQ is provisioned and packages are installed. Inter-service messaging is *
 | Setting | Value |
 |---|---|
 | AMQP URL | `amqp://guest:guest@localhost:5672` (or `rabbitmq:5672` in Docker) |
-| Queue name | `ielts_messages` |
+| Queue names | `ielts.test`, `ielts.submission`, `ielts.analytics` — one per consuming service (`RMQ_QUEUES` in `libs/common/src/events/rmq-patterns.ts`). A shared queue would round-robin messages to services without a matching handler. |
 | Queue type | Durable |
 | Transport | `Transport.RMQ` (NestJS `@nestjs/microservices`) |
 
 Services using RabbitMQ: `test-service`, `submission-service`, `analytics-service`.
+
+Publishers inject a client per destination queue (`RMQ_CLIENTS.TEST | SUBMISSION | ANALYTICS`), e.g. submission-service emits `grading.*` to its own queue and `analytics.test.submitted` to the analytics queue.
 
 ---
 
