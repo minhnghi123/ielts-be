@@ -122,7 +122,7 @@ export class PlanService {
                 skill,
                 current: signals.current[skill],
                 target: signals.goals?.targets?.[skill]?.target ?? null,
-                gap: signals.goals && signals.current[skill] != null ? round5(signals.goals.targets[skill].target - signals.current[skill]!) : null,
+                gap: signals.goals && signals.current[skill] != null ? round5(signals.goals.targets[skill].target - signals.current[skill]) : null,
             })),
         };
     }
@@ -200,7 +200,7 @@ export class PlanService {
         const days = remaining.slice(0, dayCount);
         if (days.length === 0) return [];
 
-        const gap = (sk: Skill) => (s.goals && s.current[sk] != null ? round5(s.goals.targets[sk].target - s.current[sk]!) : null);
+        const gap = (sk: Skill) => (s.goals && s.current[sk] != null ? round5(s.goals.targets[sk].target - s.current[sk]) : null);
         const doneTypes = new Set(alreadyDone.map((t) => `${t.taskType}:${t.skill ?? ''}`));
         const cands: Candidate[] = [];
 
