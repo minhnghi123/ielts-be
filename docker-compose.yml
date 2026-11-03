@@ -1,6 +1,6 @@
 # Local infrastructure for development.
 #   docker compose up -d            → RabbitMQ only (DB stays on Supabase)
-#   POSTGRES_PASSWORD=... docker compose --profile db up -d → RabbitMQ + a local Postgres (set DB_* in each apps/*/.env accordingly)
+#   docker compose --profile db up -d → RabbitMQ + a local Postgres (set DB_* in each apps/*/.env accordingly)
 services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -21,7 +21,7 @@ services:
     container_name: ielts-pg
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in your shell or .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-ielts}
     ports:
       - "5432:5432"
