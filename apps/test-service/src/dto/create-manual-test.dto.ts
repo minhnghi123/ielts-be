@@ -10,8 +10,14 @@ import {
   IsNumber,
   IsIn,
   IsObject,
+  IsInt,
+  Min,
+  Max,
+  MaxLength,
 } from 'class-validator';
 import type { Skill } from '../entities/test.entity';
+import { QUESTION_TYPES } from '@app/common';
+import { EvidenceAnchorDto, NormalizeQuestionType } from './create-question.dto';
 
 export class CreateManualQuestionAnswerDto {
   @ApiProperty({ type: [String] })
@@ -29,9 +35,11 @@ export class CreateManualQuestionDto {
   @IsNumber()
   questionOrder: number;
 
-  @ApiProperty()
+  @ApiProperty({ enum: QUESTION_TYPES })
+  @NormalizeQuestionType()
   @IsString()
   @IsNotEmpty()
+  @IsIn(QUESTION_TYPES, { message: 'questionType must be one of: ' + QUESTION_TYPES.join(', ') })
   questionType: string;
 
   @ApiProperty({ required: false })
@@ -43,10 +51,24 @@ export class CreateManualQuestionDto {
   @IsObject()
   config: Record<string, any>;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, description: 'Vietnamese explanation shown after submission' })
   @IsOptional()
   @IsString()
+  @MaxLength(4000)
   explanation?: string;
+
+  @ApiProperty({ required: false, minimum: 1, maximum: 5 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  difficulty?: number | null;
+
+  @ApiProperty({ required: false, type: () => EvidenceAnchorDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EvidenceAnchorDto)
+  evidenceAnchor?: EvidenceAnchorDto | null;
 
   @ApiProperty({ type: () => CreateManualQuestionAnswerDto })
   @ValidateNested()

@@ -4,11 +4,51 @@ import { DataSource, Repository } from 'typeorm';
 import { LearnerBandProfile } from './entities/learner-band-profile.entity';
 import { LearnerMistake } from './entities/learner-mistake.entity';
 import { LearnerProgressSnapshot } from './entities/learner-progress-snapshot.entity';
+import { LearnerGoal } from './entities/learner-goal.entity';
 import {
     UpsertBandProfileDto,
     CreateSnapshotDto,
     CreateMistakeDto,
 } from './dto/analytics.dto';
+import { UpsertLearnerGoalsDto } from './dto/learner-goals.dto';
+import { BadRequestException } from '@nestjs/common';
+import { normalizeQuestionType } from '@app/common';
+
+export const GOAL_SKILLS = ['listening', 'reading', 'writing', 'speaking'] as const;
+export type GoalSkill = (typeof GOAL_SKILLS)[number];
+
+/** Goals plus everything the UI needs to say "còn X tuần, cần +Y band". */
+export type LearnerGoalsView = {
+    learnerId: string;
+    targetOverall: number;
+    targets: Record<GoalSkill, { target: number; explicit: boolean; current: number | null; gap: number | null }>;
+    examDate: string | null;
+    daysLeft: number | null;
+    weeksLeft: number | null;
+    minutesPerDay: number;
+    daysPerWeek: number;
+    weeklyMinutes: number;
+    purpose: string | null;
+    updatedAt: Date;
+};
+
+/** Local calendar date (YYYY-MM-DD) in the learner's assumed timezone (Asia/Ho_Chi_Minh). */
+export function todayIsoDate(now: Date = new Date(), tz = 'Asia/Ho_Chi_Minh'): string {
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    return fmt.format(now); // en-CA yields YYYY-MM-DD
+}
+
+export function daysBetweenIso(fromIso: string, toIso: string): number {
+    const a = Date.UTC(+fromIso.slice(0, 4), +fromIso.slice(5, 7) - 1, +fromIso.slice(8, 10));
+    const b = Date.UTC(+toIso.slice(0, 4), +toIso.slice(5, 7) - 1, +toIso.slice(8, 10));
+    return Math.round((b - a) / 86_400_000);
+}
+
+export function isValidIsoDate(iso: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const d = new Date(`${iso}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
+}
 
 type QuestionTypeMastery = {
     questionType: string;
@@ -37,8 +77,100 @@ export class AnalyticsServiceService {
         private readonly mistakeRepo: Repository<LearnerMistake>,
         @InjectRepository(LearnerProgressSnapshot)
         private readonly snapshotRepo: Repository<LearnerProgressSnapshot>,
+        @InjectRepository(LearnerGoal)
+        private readonly goalRepo: Repository<LearnerGoal>,
         private readonly dataSource: DataSource,
     ) { }
+
+    // ─── Learner Goals ────────────────────────────────────────────────────────────
+
+    async getGoals(learnerId: string): Promise<LearnerGoalsView | null> {
+        const goal = await this.goalRepo.findOne({ where: { learnerId } });
+        if (!goal) return null;
+        return this.buildGoalsView(goal, await this.getBandProfiles(learnerId));
+    }
+
+    /**
+     * Creates or replaces the learner's goals. Also pushes the effective per-skill
+     * targets into `learner_band_profiles.target_band` so every existing report
+     * (dashboard, analysis, AI coach context) shows the learner's real target
+     * instead of the synthetic "current + 0.5".
+     */
+    async upsertGoals(learnerId: string, dto: UpsertLearnerGoalsDto): Promise<LearnerGoalsView> {
+        const today = todayIsoDate();
+        let examDate: string | null = null;
+        if (dto.examDate) {
+            if (!isValidIsoDate(dto.examDate)) throw new BadRequestException('examDate is not a valid calendar date');
+            if (daysBetweenIso(today, dto.examDate) < 0) throw new BadRequestException('examDate must be today or in the future');
+            if (daysBetweenIso(today, dto.examDate) > 730) throw new BadRequestException('examDate must be within the next 2 years');
+            examDate = dto.examDate;
+        }
+        for (const skill of GOAL_SKILLS) {
+            const v = dto[`target${skill[0].toUpperCase()}${skill.slice(1)}` as keyof UpsertLearnerGoalsDto] as number | null | undefined;
+            if (v != null && Math.abs(v - dto.targetOverall) > 2) {
+                throw new BadRequestException(`target for ${skill} is more than 2 bands away from the overall target`);
+            }
+        }
+
+        const existing = await this.goalRepo.findOne({ where: { learnerId } });
+        const goal = existing ?? this.goalRepo.create({ learnerId });
+        goal.targetOverall = dto.targetOverall;
+        goal.targetListening = dto.targetListening ?? null;
+        goal.targetReading = dto.targetReading ?? null;
+        goal.targetWriting = dto.targetWriting ?? null;
+        goal.targetSpeaking = dto.targetSpeaking ?? null;
+        goal.examDate = examDate;
+        goal.minutesPerDay = dto.minutesPerDay;
+        goal.daysPerWeek = dto.daysPerWeek;
+        goal.purpose = dto.purpose ?? null;
+        goal.updatedAt = new Date();
+        const saved = await this.goalRepo.save(goal);
+
+        const effective = this.effectiveTargets(saved);
+        for (const skill of GOAL_SKILLS) {
+            await this.upsertBandProfile({ learnerId, skill, targetBand: effective[skill].target });
+        }
+        await this.upsertBandProfile({ learnerId, skill: 'overall', targetBand: saved.targetOverall });
+
+        return this.buildGoalsView(saved, await this.getBandProfiles(learnerId));
+    }
+
+    private effectiveTargets(goal: LearnerGoal): Record<GoalSkill, { target: number; explicit: boolean }> {
+        return {
+            listening: { target: goal.targetListening ?? goal.targetOverall, explicit: goal.targetListening != null },
+            reading: { target: goal.targetReading ?? goal.targetOverall, explicit: goal.targetReading != null },
+            writing: { target: goal.targetWriting ?? goal.targetOverall, explicit: goal.targetWriting != null },
+            speaking: { target: goal.targetSpeaking ?? goal.targetOverall, explicit: goal.targetSpeaking != null },
+        };
+    }
+
+    private buildGoalsView(goal: LearnerGoal, profiles: LearnerBandProfile[]): LearnerGoalsView {
+        const effective = this.effectiveTargets(goal);
+        const targets = {} as LearnerGoalsView['targets'];
+        for (const skill of GOAL_SKILLS) {
+            const profile = profiles.find((p) => p.skill === skill);
+            const current = profile?.currentBand != null ? Number(profile.currentBand) : null;
+            targets[skill] = {
+                ...effective[skill],
+                current,
+                gap: current == null ? null : Number((effective[skill].target - current).toFixed(1)),
+            };
+        }
+        const daysLeft = goal.examDate ? Math.max(0, daysBetweenIso(todayIsoDate(), goal.examDate)) : null;
+        return {
+            learnerId: goal.learnerId,
+            targetOverall: goal.targetOverall,
+            targets,
+            examDate: goal.examDate,
+            daysLeft,
+            weeksLeft: daysLeft == null ? null : Math.ceil(daysLeft / 7),
+            minutesPerDay: goal.minutesPerDay,
+            daysPerWeek: goal.daysPerWeek,
+            weeklyMinutes: goal.minutesPerDay * goal.daysPerWeek,
+            purpose: goal.purpose,
+            updatedAt: goal.updatedAt,
+        };
+    }
 
     // ─── Band Profiles ────────────────────────────────────────────────────────────
 
@@ -305,7 +437,17 @@ export class AnalyticsServiceService {
             [learnerId],
         );
 
-        return (rows ?? []).map((row) => {
+        // Legacy rows may still carry non-canonical spellings; merge them into one bucket.
+        const merged = new Map<string, { total: number; correct: number }>();
+        for (const row of rows ?? []) {
+            const key = normalizeQuestionType(row.question_type) ?? String(row.question_type ?? 'unknown');
+            const acc = merged.get(key) ?? { total: 0, correct: 0 };
+            acc.total += Number(row.total ?? 0);
+            acc.correct += Number(row.correct ?? 0);
+            merged.set(key, acc);
+        }
+        return [...merged.entries()].sort((a, b) => b[1].total - a[1].total).map(([question_type, agg]) => {
+            const row = { question_type, ...agg };
             const total = Number(row.total ?? 0);
             const correct = Number(row.correct ?? 0);
             const accuracy = total > 0 ? Number(((correct / total) * 100).toFixed(1)) : 0;

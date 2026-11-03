@@ -6,9 +6,9 @@ import * as mammoth from 'mammoth';
 export type QuestionSignal =
   | 'multiple_choice'
   | 'fill_in_blank'
-  | 'true_false_ng'
-  | 'yes_no_ng'
-  | 'matching_headings'
+  | 'true_false_not_given'
+  | 'yes_no_not_given'
+  | 'matching_heading'
   | 'short_answer'
   | 'matching_features';
 
@@ -58,10 +58,10 @@ export interface ParsedTest {
 
 const SIGNAL_MAP: Record<string, QuestionSignal> = {
   MCQ: 'multiple_choice',
-  TFNG: 'true_false_ng',
-  YNTG: 'yes_no_ng',
+  TFNG: 'true_false_not_given',
+  YNTG: 'yes_no_not_given',
   FILL: 'fill_in_blank',
-  MATCH_HEADING: 'matching_headings',
+  MATCH_HEADING: 'matching_heading',
   SHORT: 'short_answer',
   MATCH_FEATURE: 'matching_features',
 };
@@ -258,7 +258,7 @@ export class DocxParserService {
     const headings: string[] = [];
 
     // Collect "List of Headings" for matching_headings type
-    if (qType === 'matching_headings') {
+    if (qType === 'matching_heading') {
       if (/^List of Headings/i.test(lines[i])) {
         i++;
         while (i < lines.length && /^[ivxlcdmIVXLCDM]+\./.test(lines[i])) {
@@ -305,7 +305,7 @@ export class DocxParserService {
       }
 
       // MATCHING_HEADINGS: "N. Paragraph X → ANSWER: ii"
-      if (qType === 'matching_headings') {
+      if (qType === 'matching_heading') {
         const matchLine = line.match(
           /^(\d+)\.\s+(.+?)\s*[→>]\s*ANSWER:\s*(.+)/i,
         );
@@ -373,9 +373,9 @@ export class DocxParserService {
 
   private buildConfig(qType: QuestionSignal): Record<string, any> {
     switch (qType) {
-      case 'true_false_ng':
+      case 'true_false_not_given':
         return { options: ['TRUE', 'FALSE', 'NOT GIVEN'] };
-      case 'yes_no_ng':
+      case 'yes_no_not_given':
         return { options: ['YES', 'NO', 'NOT GIVEN'] };
       case 'fill_in_blank':
       case 'short_answer':

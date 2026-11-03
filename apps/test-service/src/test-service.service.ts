@@ -278,6 +278,7 @@ export class TestServiceService {
         for (const q of group.questions ?? []) {
           delete (q as any).answer;
           delete (q as any).explanation;
+          delete (q as any).evidenceAnchor;
         }
       }
     }
@@ -379,6 +380,8 @@ export class TestServiceService {
                     questionText: questionDto.questionText,
                     config: questionDto.config,
                     explanation: questionDto.explanation,
+                    difficulty: questionDto.difficulty ?? null,
+                    evidenceAnchor: questionDto.evidenceAnchor ?? null,
                   });
                   const savedQuestion = await queryRunner.manager.save(
                     Question,
@@ -576,6 +579,8 @@ export class TestServiceService {
       questionText: dto.questionText,
       config: dto.config,
       explanation: dto.explanation,
+      difficulty: dto.difficulty ?? null,
+      evidenceAnchor: dto.evidenceAnchor ?? null,
     });
     const savedQuestion = await this.questionRepo.save(question);
 
@@ -607,6 +612,9 @@ export class TestServiceService {
     if (dto.questionType) question.questionType = dto.questionType;
     if (dto.config) question.config = dto.config;
     if (dto.explanation !== undefined) question.explanation = dto.explanation;
+    if (dto.difficulty !== undefined) question.difficulty = dto.difficulty;
+    if (dto.evidenceAnchor !== undefined)
+      question.evidenceAnchor = dto.evidenceAnchor;
     if (dto.questionOrder) question.questionOrder = dto.questionOrder;
 
     await this.questionRepo.save(question);
@@ -1137,6 +1145,7 @@ export class TestServiceService {
         if (qa.question) {
           delete (qa.question as any).answer;
           delete (qa.question as any).explanation;
+          delete (qa.question as any).evidenceAnchor;
         }
       }
     }

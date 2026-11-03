@@ -109,6 +109,23 @@ Full learner dashboard. The most expensive endpoint — aggregates band profiles
 
 ---
 
+### GET `/analytics/goals/:learnerId`
+
+Owner or privileged. Returns `null` when the learner has not set goals yet, otherwise:
+
+```json
+{
+  "learnerId": "…", "targetOverall": 7.0,
+  "targets": { "reading": { "target": 7.5, "explicit": true, "current": 6.0, "gap": 1.5 }, "...": {} },
+  "examDate": "2026-12-20", "daysLeft": 47, "weeksLeft": 7,
+  "minutesPerDay": 45, "daysPerWeek": 5, "weeklyMinutes": 225, "purpose": "study_abroad"
+}
+```
+
+### PUT `/analytics/goals/:learnerId`
+
+Body: `UpsertLearnerGoalsDto` — `targetOverall` (required, 4.0–9.0 half bands), optional per-skill targets (must be within ±2 bands of overall), `examDate` (YYYY-MM-DD, today…+2 years, or null), `minutesPerDay` 10–300, `daysPerWeek` 1–7, `purpose`. Replaces the row and syncs `learner_band_profiles.target_band` for every skill + `overall`.
+
 ### GET `/analytics/band-profiles/:learnerId`
 
 Per-skill band profiles for a learner (5 records: reading, listening, writing, speaking, overall).
