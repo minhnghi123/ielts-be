@@ -242,7 +242,7 @@ pnpm run start:prod
 ### Docker (full stack)
 
 ```bash
-# Local infrastructure: RabbitMQ (add --profile db for a local PostgreSQL instead of Supabase)
+# Local infrastructure: RabbitMQ
 docker compose up -d
 
 docker compose down
