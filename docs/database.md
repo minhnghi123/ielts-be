@@ -295,7 +295,7 @@ Raw AI model output for a writing submission.
 |---|---|---|---|---|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
 | `submission_id` | `uuid` | NO | — | FK → `writing_submissions.id` |
-| `model_name` | `varchar(100)` | YES | — | e.g., `'llama-3.3-70b-versatile'` |
+| `model_name` | `varchar(100)` | YES | — | e.g., `'openai/gpt-oss-120b'` |
 | `model_version` | `varchar(50)` | YES | — | |
 | `prompt_version` | `varchar(50)` | YES | — | Grading prompt version for reproducibility |
 | `task_response` | `numeric(2,1)` | YES | — | Task Response criterion band |
