@@ -1,7 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
-import { ERROR_CAUSES, QUESTION_TYPES, normalizeQuestionType } from '@app/common';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import {
+  ERROR_CAUSES,
+  QUESTION_TYPES,
+  normalizeQuestionType,
+} from '@app/common';
 
 export class BuildDrillDto {
   @ApiProperty({ enum: ['listening', 'reading'] })
@@ -10,11 +23,18 @@ export class BuildDrillDto {
 
   @ApiPropertyOptional({ enum: QUESTION_TYPES })
   @IsOptional()
-  @Transform(({ value }) => (value == null || value === '' ? undefined : (normalizeQuestionType(value) ?? value)))
+  @Transform(({ value }) =>
+    value == null || value === ''
+      ? undefined
+      : (normalizeQuestionType(value) ?? value),
+  )
   @IsIn(QUESTION_TYPES)
   questionType?: (typeof QUESTION_TYPES)[number];
 
-  @ApiPropertyOptional({ enum: ERROR_CAUSES, description: 'Prioritise notebook mistakes with this cause' })
+  @ApiPropertyOptional({
+    enum: ERROR_CAUSES,
+    description: 'Prioritise notebook mistakes with this cause',
+  })
   @IsOptional()
   @IsIn(ERROR_CAUSES)
   errorCause?: (typeof ERROR_CAUSES)[number];
