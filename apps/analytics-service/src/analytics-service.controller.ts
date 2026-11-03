@@ -1,37 +1,37 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Param,
-  Body,
-  Query,
-  ParseUUIDPipe,
-  HttpCode,
-  HttpStatus,
-  Logger,
-  UseGuards,
-  Patch,
-  ForbiddenException,
+    Controller,
+    Get,
+    Post,
+    Put,
+    Param,
+    Body,
+    Query,
+    ParseUUIDPipe,
+    HttpCode,
+    HttpStatus,
+    Logger,
+    UseGuards,
+    Patch,
+    ForbiddenException,
 } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import {
-  RMQ_PATTERNS,
-  CurrentUser,
-  Roles,
-  RolesGuard,
-  assertOwnerOrPrivileged,
+    RMQ_PATTERNS,
+    CurrentUser,
+    Roles,
+    RolesGuard,
+    assertOwnerOrPrivileged,
 } from '@app/common';
 import type { RequestUser } from '@app/common';
 import { AnalyticsServiceService } from './analytics-service.service';
 import {
-  UpsertBandProfileDto,
-  CreateSnapshotDto,
-  CreateMistakeDto,
-  UpdateMistakeStatusDto,
-  ReviewMistakeDto,
-  UpsertExplanationDto,
-  VoteExplanationDto,
+    UpsertBandProfileDto,
+    CreateSnapshotDto,
+    CreateMistakeDto,
+    UpdateMistakeStatusDto,
+    ReviewMistakeDto,
+    UpsertExplanationDto,
+    VoteExplanationDto,
 } from './dto/analytics.dto';
 import { UpsertLearnerGoalsDto } from './dto/learner-goals.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -41,277 +41,197 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @Controller('analytics')
 @UseGuards(RolesGuard)
 export class AnalyticsServiceController {
-  private readonly logger = new Logger(AnalyticsServiceController.name);
+    private readonly logger = new Logger(AnalyticsServiceController.name);
 
-  constructor(private readonly service: AnalyticsServiceService) {}
+    constructor(private readonly service: AnalyticsServiceService) { }
 
-  // ─── Learner endpoints ────────────────────────────────────────────────────────
+    // ─── Learner endpoints ────────────────────────────────────────────────────────
 
-  @Get('summary/:learnerId')
-  @ApiOperation({ summary: 'Get full dashboard summary for a learner' })
-  getDashboardSummary(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.getDashboardSummary(learnerId);
-  }
-
-  @Get('goals/:learnerId')
-  @ApiOperation({
-    summary:
-      "Learner's target bands, exam date and study budget (null when not set yet)",
-  })
-  getGoals(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.getGoals(learnerId);
-  }
-
-  @Put('goals/:learnerId')
-  @ApiOperation({
-    summary:
-      'Create or replace the learner goals; syncs per-skill target bands',
-  })
-  upsertGoals(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @Body() dto: UpsertLearnerGoalsDto,
-    @CurrentUser() user: RequestUser,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.upsertGoals(learnerId, dto);
-  }
-
-  @Get('band-profiles/:learnerId')
-  @ApiOperation({ summary: 'Get per-skill band profiles for a learner' })
-  getBandProfiles(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.getBandProfiles(learnerId);
-  }
-
-  @Put('band-profiles')
-  @Roles('system', 'admin')
-  @ApiOperation({
-    summary: 'Create or update a band profile for a learner+skill',
-  })
-  upsertBandProfile(@Body() dto: UpsertBandProfileDto) {
-    return this.service.upsertBandProfile(dto);
-  }
-
-  @Get('progress/:learnerId')
-  @ApiOperation({ summary: 'Get overall band score history for charting' })
-  getProgress(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.getProgressSnapshots(learnerId);
-  }
-
-  @Post('progress/snapshot')
-  @Roles('system', 'admin')
-  @ApiOperation({
-    summary: 'Record a new overall band snapshot after test completion',
-  })
-  createSnapshot(@Body() dto: CreateSnapshotDto) {
-    return this.service.createSnapshot(dto);
-  }
-
-  @Get('mistakes/:learnerId')
-  @ApiOperation({
-    summary:
-      "Learner's mistake notebook (filters: status, skill, questionType, attemptId, due=1)",
-  })
-  getMistakes(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-    @Query('status') status?: string,
-    @Query('skill') skill?: string,
-    @Query('questionType') questionType?: string,
-    @Query('attemptId') attemptId?: string,
-    @Query('due') due?: string,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.listMistakes(learnerId, {
-      status,
-      skill,
-      questionType,
-      attemptId,
-      dueOnly: due === '1' || due === 'true',
-    });
-  }
-
-  @Get('mistakes/:learnerId/summary')
-  @ApiOperation({
-    summary:
-      'Mistake counts by error cause / question type (optionally one attempt)',
-  })
-  getMistakeSummary(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-    @Query('attemptId') attemptId?: string,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.mistakeSummary(learnerId, attemptId || undefined);
-  }
-
-  @Patch('mistakes/:id/status')
-  @ApiOperation({
-    summary: 'Mark a mistake new / reviewing / fixed (owner only)',
-  })
-  updateMistakeStatus(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateMistakeStatusDto,
-    @CurrentUser() user: RequestUser,
-  ) {
-    if (!user?.profileId)
-      throw new ForbiddenException('Learner profile required');
-    return this.service.updateMistakeStatus(id, user.profileId, dto.status);
-  }
-
-  // ─── Explanation cache ────────────────────────────────────────────────────────
-
-  @Get('explanations')
-  @ApiOperation({
-    summary:
-      'Cached Vietnamese explanation for a question (+ optional wrong answer)',
-  })
-  getExplanation(
-    @Query('questionId', ParseUUIDPipe) questionId: string,
-    @Query('userAnswer') userAnswer?: string,
-  ) {
-    return this.service.findExplanation(questionId, userAnswer);
-  }
-
-  @Put('explanations')
-  @Roles('system', 'admin', 'teacher')
-  @ApiOperation({
-    summary:
-      'Store/replace an explanation (AI via server route, or teacher/admin)',
-  })
-  upsertExplanation(
-    @Body() dto: UpsertExplanationDto,
-    @CurrentUser() user: RequestUser,
-  ) {
-    if (user?.role === 'teacher') dto.source = 'teacher';
-    return this.service.upsertExplanation(dto);
-  }
-
-  @Post('explanations/:id/vote')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Learner feedback: was the explanation helpful?' })
-  voteExplanation(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: VoteExplanationDto,
-  ) {
-    return this.service.voteExplanation(id, dto.helpful);
-  }
-
-  @Post('mistakes/review')
-  @Roles('system', 'admin')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Drill answer on a notebook question → SRS update (fixed after 2 correct)',
-  })
-  reviewMistake(@Body() dto: ReviewMistakeDto) {
-    return this.service.reviewMistake(
-      dto.learnerId,
-      dto.questionId,
-      dto.correct,
-    );
-  }
-
-  @Post('mistakes')
-  @Roles('system', 'admin')
-  @ApiOperation({ summary: 'Record a mistake for a learner on a question' })
-  recordMistake(@Body() dto: CreateMistakeDto) {
-    return this.service.recordMistake(dto);
-  }
-
-  @Get('leaderboard')
-  @ApiOperation({
-    summary:
-      'Top learners by average band (visible to every signed-in learner)',
-  })
-  getLeaderboard(
-    @Query('limit') limit: string | undefined,
-    @CurrentUser() user: RequestUser,
-  ) {
-    const n = Math.min(100, Math.max(1, parseInt(limit ?? '50', 10) || 50));
-    return this.service.getLeaderboard(n, user?.profileId ?? null);
-  }
-
-  // ─── Sync endpoints ───────────────────────────────────────────────────────────
-
-  @Post('sync/:learnerId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Full analytics sync for one learner — rebuilds band profiles, snapshots, and mistakes from source tables',
-  })
-  syncLearner(
-    @Param('learnerId', ParseUUIDPipe) learnerId: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    assertOwnerOrPrivileged(user, learnerId);
-    return this.service.fullSyncLearnerAnalytics(learnerId);
-  }
-
-  @Post('sync-all')
-  @Roles('admin')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Sync analytics for ALL learners who have submitted attempts (admin)',
-  })
-  syncAll() {
-    return this.service.syncAllLearnersAnalytics();
-  }
-
-  // ─── Admin endpoints ──────────────────────────────────────────────────────────
-
-  @Get('admin/global-stats')
-  @Roles('admin')
-  @ApiOperation({
-    summary:
-      'Platform-wide analytics: total users, attempts per day, band distribution, top learners',
-  })
-  getAdminGlobalStats() {
-    return this.service.getAdminGlobalStats();
-  }
-
-  // ─── Asynchronous Handlers (Message Broker) ───────────────────────────────────
-
-  @EventPattern(RMQ_PATTERNS.ANALYTICS.TEST_SUBMITTED)
-  async handleTestSubmittedEvent(
-    @Payload() data: any,
-    @Ctx() context: RmqContext,
-  ) {
-    this.logger.log(
-      `[RMQ Worker] Received TEST_SUBMITTED event for learner: ${data.learnerId}`,
-    );
-    const channel = context.getChannelRef();
-    const originalMsg = context.getMessage();
-
-    try {
-      // Trigger an analytics sync for this learner now that they've submitted a test
-      await this.service.fullSyncLearnerAnalytics(data.learnerId);
-      this.logger.log(
-        `[RMQ Worker] Analytics fully synced for learner: ${data.learnerId}`,
-      );
-      channel.ack(originalMsg);
-    } catch (error) {
-      this.logger.error(
-        `[RMQ Worker] Error syncing analytics for ${data.learnerId}: ${error.message}`,
-      );
-      // We nack but do not requeue, as a full failure might just trigger next time
-      channel.nack(originalMsg, false, false);
+    @Get('summary/:learnerId')
+    @ApiOperation({ summary: 'Get full dashboard summary for a learner' })
+    getDashboardSummary(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.getDashboardSummary(learnerId);
     }
-  }
+
+    @Get('goals/:learnerId')
+    @ApiOperation({ summary: "Learner's target bands, exam date and study budget (null when not set yet)" })
+    getGoals(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.getGoals(learnerId);
+    }
+
+    @Put('goals/:learnerId')
+    @ApiOperation({ summary: 'Create or replace the learner goals; syncs per-skill target bands' })
+    upsertGoals(
+        @Param('learnerId', ParseUUIDPipe) learnerId: string,
+        @Body() dto: UpsertLearnerGoalsDto,
+        @CurrentUser() user: RequestUser,
+    ) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.upsertGoals(learnerId, dto);
+    }
+
+    @Get('band-profiles/:learnerId')
+    @ApiOperation({ summary: 'Get per-skill band profiles for a learner' })
+    getBandProfiles(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.getBandProfiles(learnerId);
+    }
+
+    @Put('band-profiles')
+    @Roles('system', 'admin')
+    @ApiOperation({ summary: 'Create or update a band profile for a learner+skill' })
+    upsertBandProfile(@Body() dto: UpsertBandProfileDto) {
+        return this.service.upsertBandProfile(dto);
+    }
+
+    @Get('progress/:learnerId')
+    @ApiOperation({ summary: 'Get overall band score history for charting' })
+    getProgress(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.getProgressSnapshots(learnerId);
+    }
+
+    @Post('progress/snapshot')
+    @Roles('system', 'admin')
+    @ApiOperation({ summary: 'Record a new overall band snapshot after test completion' })
+    createSnapshot(@Body() dto: CreateSnapshotDto) {
+        return this.service.createSnapshot(dto);
+    }
+
+    @Get('mistakes/:learnerId')
+    @ApiOperation({ summary: "Learner's mistake notebook (filters: status, skill, questionType, attemptId, due=1)" })
+    getMistakes(
+        @Param('learnerId', ParseUUIDPipe) learnerId: string,
+        @CurrentUser() user: RequestUser,
+        @Query('status') status?: string,
+        @Query('skill') skill?: string,
+        @Query('questionType') questionType?: string,
+        @Query('attemptId') attemptId?: string,
+        @Query('due') due?: string,
+    ) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.listMistakes(learnerId, { status, skill, questionType, attemptId, dueOnly: due === '1' || due === 'true' });
+    }
+
+    @Get('mistakes/:learnerId/summary')
+    @ApiOperation({ summary: 'Mistake counts by error cause / question type (optionally one attempt)' })
+    getMistakeSummary(
+        @Param('learnerId', ParseUUIDPipe) learnerId: string,
+        @CurrentUser() user: RequestUser,
+        @Query('attemptId') attemptId?: string,
+    ) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.mistakeSummary(learnerId, attemptId || undefined);
+    }
+
+    @Patch('mistakes/:id/status')
+    @ApiOperation({ summary: 'Mark a mistake new / reviewing / fixed (owner only)' })
+    updateMistakeStatus(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: UpdateMistakeStatusDto,
+        @CurrentUser() user: RequestUser,
+    ) {
+        if (!user?.profileId) throw new ForbiddenException('Learner profile required');
+        return this.service.updateMistakeStatus(id, user.profileId, dto.status);
+    }
+
+    // ─── Explanation cache ────────────────────────────────────────────────────────
+
+    @Get('explanations')
+    @ApiOperation({ summary: 'Cached Vietnamese explanation for a question (+ optional wrong answer)' })
+    getExplanation(@Query('questionId', ParseUUIDPipe) questionId: string, @Query('userAnswer') userAnswer?: string) {
+        return this.service.findExplanation(questionId, userAnswer);
+    }
+
+    @Put('explanations')
+    @Roles('system', 'admin', 'teacher')
+    @ApiOperation({ summary: 'Store/replace an explanation (AI via server route, or teacher/admin)' })
+    upsertExplanation(@Body() dto: UpsertExplanationDto, @CurrentUser() user: RequestUser) {
+        if (user?.role === 'teacher') dto.source = 'teacher';
+        return this.service.upsertExplanation(dto);
+    }
+
+    @Post('explanations/:id/vote')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Learner feedback: was the explanation helpful?' })
+    voteExplanation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: VoteExplanationDto) {
+        return this.service.voteExplanation(id, dto.helpful);
+    }
+
+    @Post('mistakes/review')
+    @Roles('system', 'admin')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Drill answer on a notebook question → SRS update (fixed after 2 correct)' })
+    reviewMistake(@Body() dto: ReviewMistakeDto) {
+        return this.service.reviewMistake(dto.learnerId, dto.questionId, dto.correct);
+    }
+
+    @Post('mistakes')
+    @Roles('system', 'admin')
+    @ApiOperation({ summary: 'Record a mistake for a learner on a question' })
+    recordMistake(@Body() dto: CreateMistakeDto) {
+        return this.service.recordMistake(dto);
+    }
+
+    @Get('leaderboard')
+    @ApiOperation({ summary: 'Top learners by average band (visible to every signed-in learner)' })
+    getLeaderboard(@Query('limit') limit: string | undefined, @CurrentUser() user: RequestUser) {
+        const n = Math.min(100, Math.max(1, parseInt(limit ?? '50', 10) || 50));
+        return this.service.getLeaderboard(n, user?.profileId ?? null);
+    }
+
+    // ─── Sync endpoints ───────────────────────────────────────────────────────────
+
+    @Post('sync/:learnerId')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Full analytics sync for one learner — rebuilds band profiles, snapshots, and mistakes from source tables',
+    })
+    syncLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.fullSyncLearnerAnalytics(learnerId);
+    }
+
+    @Post('sync-all')
+    @Roles('admin')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Sync analytics for ALL learners who have submitted attempts (admin)',
+    })
+    syncAll() {
+        return this.service.syncAllLearnersAnalytics();
+    }
+
+    // ─── Admin endpoints ──────────────────────────────────────────────────────────
+
+    @Get('admin/global-stats')
+    @Roles('admin')
+    @ApiOperation({
+        summary: 'Platform-wide analytics: total users, attempts per day, band distribution, top learners',
+    })
+    getAdminGlobalStats() {
+        return this.service.getAdminGlobalStats();
+    }
+
+    // ─── Asynchronous Handlers (Message Broker) ───────────────────────────────────
+
+    @EventPattern(RMQ_PATTERNS.ANALYTICS.TEST_SUBMITTED)
+    async handleTestSubmittedEvent(@Payload() data: any, @Ctx() context: RmqContext) {
+        this.logger.log(`[RMQ Worker] Received TEST_SUBMITTED event for learner: ${data.learnerId}`);
+        const channel = context.getChannelRef();
+        const originalMsg = context.getMessage();
+
+        try {
+            // Trigger an analytics sync for this learner now that they've submitted a test
+            await this.service.fullSyncLearnerAnalytics(data.learnerId);
+            this.logger.log(`[RMQ Worker] Analytics fully synced for learner: ${data.learnerId}`);
+            channel.ack(originalMsg);
+        } catch (error) {
+            this.logger.error(`[RMQ Worker] Error syncing analytics for ${data.learnerId}: ${error.message}`);
+            // We nack but do not requeue, as a full failure might just trigger next time
+            channel.nack(originalMsg, false, false);
+        }
+    }
 }
