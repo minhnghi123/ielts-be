@@ -13,12 +13,13 @@ DDL source: [`db/database_schema.sql`](../db/database_schema.sql) — apply manu
 | **classroom-service** | `classes`, `class_members`, `class_assignments`, `assignment_submissions`, `class_posts` |
 | **test-service** | `tests`, `sections`, `question_groups`, `questions`, `question_answers`, `writing_tasks`, `speaking_parts`, `test_attempts`, `question_attempts` (full attempt lifecycle: start → autosave draft → submit/expire → review) |
 | **submission-service** | `writing_submissions`, `writing_scores`, `ai_writing_gradings`, `speaking_submissions`, `speaking_scores`, read-only global stats |
-| **analytics-service** | `learner_band_profiles`, `learner_mistakes`, `learner_progress_snapshots` |
+| **analytics-service** | `learner_band_profiles`, `learner_mistakes`, `learner_progress_snapshots`, `learner_goals`, `learner_kc_ratings`, `question_explanations`, `study_tasks`, `saved_words` |
 
 Cross-service notes:
 - `test_attempts` is owned end-to-end by test-service (it holds the answer key needed for grading). `/api/attempts/*` is proxied only to test-service.
 - Migrations live in `db/migrations/` and must be applied manually (`synchronize: false`). `001_exam_realism.sql` adds `tests.difficulty/status/description/duration_minutes` and `test_attempts.status/duration_seconds/expires_at/draft_answers/last_saved_at/is_practice`.
 - analytics-service runs raw cross-service SQL (joins across `test_attempts`, `question_attempts`, auth tables).
+- `003_personalization.sql` (personalisation foundation): `questions.difficulty/elo_rating/evidence_anchor`, canonical `question_type` codes (see `libs/common/src/constants/question-types.ts`), `learner_goals`, mistake-notebook columns on `learner_mistakes`, `question_explanations` (cached Vietnamese explanations), `learner_kc_ratings`, `study_tasks`, `saved_words`, `ai_writing_gradings.errors_json`.
 
 ---
 
@@ -426,3 +427,45 @@ Adds `teacher_profiles`; `tests.visibility`, `tests.owner_role`; `test_attempts.
 `test_attempts.attempt_no`; and the classroom-service tables `classes`, `class_members`,
 `class_assignments`, `assignment_submissions`, `class_posts`. Column-level documentation lives in
 `docs/features/teacher-classroom/PLAN.md` §5. Rollback: `002_teacher_classroom_down.sql`.
+
+
+---
+
+### `learner_goals` (003)
+
+One row per learner. Drives every personalised recommendation.
+
+| Column | Type | Nullable | Default | Description |
+|---|---|---|---|---|
+| `learner_id` | `uuid` | NO | — | PK, FK → `learner_profiles.id` |
+| `target_overall` | `numeric(2,1)` | NO | — | 4.0–9.0, half bands |
+| `target_listening` / `target_reading` / `target_writing` / `target_speaking` | `numeric(2,1)` | YES | — | Per-skill target; NULL = same as overall |
+| `exam_date` | `date` | YES | — | NULL = not booked yet |
+| `minutes_per_day` | `int` | NO | `30` | 10–300 |
+| `days_per_week` | `int` | NO | `5` | 1–7 |
+| `purpose` | `varchar(30)` | YES | — | `study_abroad` · `immigration` · `work` · `graduation` · `other` |
+| `created_at`, `updated_at` | `timestamptz` | NO | `now()` | |
+
+`PUT /analytics/goals/:learnerId` also writes the effective per-skill targets into `learner_band_profiles.target_band`.
+
+### `questions` additions (003)
+
+| Column | Type | Description |
+|---|---|---|
+| `difficulty` | `smallint` 1–5 | Author estimate; shown in builder |
+| `elo_rating` | `numeric(7,2)` default 1500 | Self-calibrating difficulty (updated by analytics-service) |
+| `evidence_anchor` | `jsonb` | `{kind:'passage', paragraph?, quote?}` or `{kind:'audio', startMs, endMs?, quote?}` — where the answer is found; hidden until the attempt is submitted |
+
+`question_type` is normalised to: `multiple_choice`, `fill_in_blank`, `short_answer`, `true_false_not_given`, `yes_no_not_given`, `matching_heading`, `matching`, `matching_features`, `sentence_ending`.
+
+### `learner_mistakes` additions (003)
+
+`attempt_id`, `skill`, `question_type`, `error_cause` (`spelling` · `word_limit` · `paraphrase_miss` · `tfng_confusion` · `distractor` · `number_format` · `location_miss` · `inference` · `skipped` · `time_management` · `unknown`), `user_answer`, `correct_answer`, `status` (`new` · `reviewing` · `fixed`), SRS fields (`srs_interval_days`, `srs_ease`, `next_review_at`, `review_count`, `last_reviewed_at`), `updated_at`. Unique per (`attempt_id`, `question_id`).
+
+### `question_explanations` (003)
+
+Cache of AI/author/teacher explanations keyed by (`question_id`, `user_answer_norm`); `user_answer_norm = ''` is the generic explanation. Fields: `error_cause`, `evidence_quote`, `explanation_vi`, `tip_vi`, `model`, `source`, `approved_by/at`, `helpful_votes`, `unhelpful_votes`.
+
+### `learner_kc_ratings`, `study_tasks`, `saved_words` (003)
+
+Created now so later PRs need no further migration: per-knowledge-component Elo ratings (`learner_id, skill, kc` unique), the learner's scheduled study tasks (`task_type`, `kc`, `ref_type/ref_id`, `title_vi`, `reason_vi`, `est_minutes`, `done_at`), and saved vocabulary with SRS fields (`learner_id, word` unique).

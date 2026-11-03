@@ -162,6 +162,8 @@ Proxied to: `http://localhost:5004/analytics/*`
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/analytics/summary/:learnerId` | None | Full dashboard summary |
+| GET | `/api/analytics/goals/:learnerId` | Owner | Learner goals (targets, exam date, study budget) |
+| PUT | `/api/analytics/goals/:learnerId` | Owner | Create/replace learner goals |
 | GET | `/api/analytics/band-profiles/:learnerId` | None | Per-skill band profiles |
 | PUT | `/api/analytics/band-profiles` | None | Upsert band profile |
 | GET | `/api/analytics/progress/:learnerId` | None | Progress time series |

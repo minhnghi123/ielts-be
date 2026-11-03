@@ -27,6 +27,7 @@ import {
     CreateSnapshotDto,
     CreateMistakeDto,
 } from './dto/analytics.dto';
+import { UpsertLearnerGoalsDto } from './dto/learner-goals.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('Analytics')
@@ -45,6 +46,24 @@ export class AnalyticsServiceController {
     getDashboardSummary(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
         assertOwnerOrPrivileged(user, learnerId);
         return this.service.getDashboardSummary(learnerId);
+    }
+
+    @Get('goals/:learnerId')
+    @ApiOperation({ summary: "Learner's target bands, exam date and study budget (null when not set yet)" })
+    getGoals(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.getGoals(learnerId);
+    }
+
+    @Put('goals/:learnerId')
+    @ApiOperation({ summary: 'Create or replace the learner goals; syncs per-skill target bands' })
+    upsertGoals(
+        @Param('learnerId', ParseUUIDPipe) learnerId: string,
+        @Body() dto: UpsertLearnerGoalsDto,
+        @CurrentUser() user: RequestUser,
+    ) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.upsertGoals(learnerId, dto);
     }
 
     @Get('band-profiles/:learnerId')
