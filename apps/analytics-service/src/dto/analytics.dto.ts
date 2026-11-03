@@ -156,3 +156,17 @@ export class VoteExplanationDto {
     @IsBoolean()
     helpful: boolean;
 }
+
+export class ReviewMistakeDto {
+    @ApiProperty()
+    @IsString()
+    learnerId: string;
+
+    @ApiProperty()
+    @IsUUID()
+    questionId: string;
+
+    @ApiProperty({ description: 'Did the learner answer correctly this time?' })
+    @IsBoolean()
+    correct: boolean;
+}

@@ -1,3 +1,5 @@
+import { DrillsController } from './drills/drills.controller';
+import { DrillsService } from './drills/drills.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -98,8 +100,9 @@ import { QuestionAttempt } from './entities/question-attempt.entity';
       },
     ]),
   ],
-  controllers: [TestServiceController],
+  controllers: [TestServiceController, DrillsController],
   providers: [
+    DrillsService,
     TestServiceService,
     DocxParserService,
     ImportTestService,

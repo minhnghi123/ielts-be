@@ -61,6 +61,13 @@ export class TestProxyController {
         await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
     }
 
+    @All(['drills', 'drills/*'])
+    @ApiOperation({ summary: 'Proxy drill routes → test-service :5002' })
+    async proxyDrills(@Req() req: Request, @Res() res: Response): Promise<void> {
+        const path = (req.originalUrl || req.url).replace(/^\/api/, '');
+        await this.proxyService.forward(req, res, `${this.baseUrl}${path}`);
+    }
+
     @All(['attempts', 'attempts/*'])
     @ApiOperation({ summary: 'Proxy attempt routes → test-service :5002' })
     async proxyAttempts(@Req() req: Request, @Res() res: Response): Promise<void> {

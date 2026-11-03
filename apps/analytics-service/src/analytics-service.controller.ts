@@ -29,6 +29,7 @@ import {
     CreateSnapshotDto,
     CreateMistakeDto,
     UpdateMistakeStatusDto,
+    ReviewMistakeDto,
     UpsertExplanationDto,
     VoteExplanationDto,
 } from './dto/analytics.dto';
@@ -157,6 +158,14 @@ export class AnalyticsServiceController {
     @ApiOperation({ summary: 'Learner feedback: was the explanation helpful?' })
     voteExplanation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: VoteExplanationDto) {
         return this.service.voteExplanation(id, dto.helpful);
+    }
+
+    @Post('mistakes/review')
+    @Roles('system', 'admin')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Drill answer on a notebook question → SRS update (fixed after 2 correct)' })
+    reviewMistake(@Body() dto: ReviewMistakeDto) {
+        return this.service.reviewMistake(dto.learnerId, dto.questionId, dto.correct);
     }
 
     @Post('mistakes')

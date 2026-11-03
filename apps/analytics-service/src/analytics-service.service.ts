@@ -119,6 +119,35 @@ export class AnalyticsServiceService {
         return this.mistakeRepo.save(m);
     }
 
+    /**
+     * Spaced-repetition step after a drill answer. Correct twice in a row → fixed;
+     * interval grows ×ease (SM-2 light). Wrong → back to new, review tomorrow.
+     */
+    async reviewMistake(learnerId: string, questionId: string, correct: boolean): Promise<LearnerMistake | null> {
+        const rows = await this.mistakeRepo.find({ where: { learnerId, questionId }, order: { createdAt: 'DESC' } });
+        if (rows.length === 0) return null;
+        const now = new Date();
+        for (const m of rows) {
+            m.reviewCount += 1;
+            m.lastReviewedAt = now;
+            m.updatedAt = now;
+            if (correct) {
+                const consecutive = m.status === 'reviewing' ? 2 : 1;
+                m.srsIntervalDays = Math.max(1, Math.round(m.srsIntervalDays * (m.status === 'new' ? 1 : m.srsEase)));
+                if (m.status === 'new') m.srsIntervalDays = 2;
+                m.status = consecutive >= 2 ? 'fixed' : 'reviewing';
+                m.nextReviewAt = new Date(now.getTime() + m.srsIntervalDays * 86_400_000);
+            } else {
+                m.status = 'new';
+                m.srsIntervalDays = 1;
+                m.srsEase = Math.max(1.3, Number(m.srsEase) - 0.2);
+                m.nextReviewAt = new Date(now.getTime() + 86_400_000);
+            }
+        }
+        await this.mistakeRepo.save(rows);
+        return rows[0];
+    }
+
     /** Counts per error cause / question type, optionally for one attempt — feeds "mẫu hình lỗi". */
     async mistakeSummary(learnerId: string, attemptId?: string) {
         const params: unknown[] = [learnerId];

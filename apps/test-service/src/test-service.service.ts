@@ -1390,7 +1390,7 @@ export class TestServiceService {
    * Build the complete set of acceptable answers for a stored correctAnswers value.
    * Every stored template is fully expanded according to IELTS answer-key rules.
    */
-  private buildAcceptableAnswers(
+  buildAcceptableAnswers(
     rawCorrectAnswers: any,
     caseSensitive: boolean,
   ): Set<string> {
@@ -1423,7 +1423,7 @@ export class TestServiceService {
    */
   private static readonly OPTION_LETTER_RE = /^([A-Ha-h])\s*[.):-]\s*(.+)$/;
 
-  private candidateForms(answer: string, caseSensitive: boolean): string[] {
+  candidateForms(answer: string, caseSensitive: boolean): string[] {
     const forms = [this.normaliseInput(answer, caseSensitive)];
     const m = answer.trim().match(TestServiceService.OPTION_LETTER_RE);
     if (m) {
