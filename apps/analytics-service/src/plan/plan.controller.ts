@@ -1,6 +1,6 @@
 import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CurrentUser, Roles, RolesGuard, assertOwnerOrPrivileged } from '@app/common';
 import type { RequestUser } from '@app/common';
@@ -9,6 +9,16 @@ import { PlanService } from './plan.service';
 export class SetTaskDoneDto {
     @ApiProperty() @IsBoolean() done: boolean;
     @ApiPropertyOptional() @IsOptional() @IsUUID() resultRef?: string;
+}
+
+export class BulkAssignDto {
+    @ApiProperty({ type: [String] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @IsUUID('4', { each: true }) learnerIds: string[];
+    @ApiProperty() @IsIn(['listening', 'reading', 'writing', 'speaking']) skill: string;
+    @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(50) kc?: string;
+    @ApiProperty() @IsString() @MaxLength(160) titleVi: string;
+    @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(240) reasonVi?: string;
+    @ApiPropertyOptional() @IsOptional() @IsInt() @Min(5) @Max(180) estMinutes?: number;
+    @ApiPropertyOptional({ enum: ['drill', 'mock', 'writing', 'speaking'] }) @IsOptional() @IsIn(['drill', 'mock', 'writing', 'speaking']) taskType?: 'drill' | 'mock' | 'writing' | 'speaking';
 }
 
 @ApiTags('Analytics')
@@ -45,6 +55,21 @@ export class PlanController {
     today(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
         assertOwnerOrPrivileged(user, learnerId);
         return this.plan.today(learnerId);
+    }
+
+    @Post('plan/tasks/bulk')
+    @Roles('system', 'admin')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Teacher/system: add one priority task to many learners for this week' })
+    bulkAssign(@Body() dto: BulkAssignDto) {
+        return this.plan.bulkAssign(dto);
+    }
+
+    @Get('writing-errors/:learnerId')
+    @ApiOperation({ summary: 'Tagged writing error counts (Grammar, Cohesion, Lexical, Task Response, Punctuation, Spelling)' })
+    writingErrors(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.plan.writingErrors(learnerId);
     }
 
     @Post('plan/rebuild-all')

@@ -30,6 +30,7 @@ import {
   UpdateClassDto,
   UpdateMemberDto,
   UpdatePostDto,
+  AssignDrillDto,
 } from './dto/classroom.dto';
 
 @ApiTags('Classroom')
@@ -259,6 +260,19 @@ export class ClassroomServiceController {
   }
 
   // ─── Gradebook & submissions ──────────────────────────────────────────────
+
+  @Get('classes/:id/heatmap')
+  @Roles('teacher', 'admin')
+  heatmap(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: RequestUser) {
+    return this.service.heatmap(id, user);
+  }
+
+  @Post('classes/:id/drills')
+  @Roles('teacher', 'admin')
+  @HttpCode(HttpStatus.OK)
+  assignDrill(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignDrillDto, @CurrentUser() user: RequestUser) {
+    return this.service.assignDrill(id, user, dto);
+  }
 
   @Get('classes/:id/gradebook')
   @Roles('teacher', 'admin')

@@ -127,6 +127,43 @@ export class PlanService {
         };
     }
 
+    /** Teacher-assigned drill → one task per learner in the current week (dedup by kc/skill/title). */
+    async bulkAssign(input: { learnerIds: string[]; skill: string; kc?: string | null; titleVi: string; reasonVi?: string | null; estMinutes?: number; taskType?: StudyTaskType }, now = new Date()): Promise<{ created: number }> {
+        const weekStart = isoDate(weekStartOf(now));
+        const today = isoDate(now);
+        let created = 0;
+        for (const learnerId of new Set(input.learnerIds)) {
+            const dup = await this.taskRepo.findOne({ where: { learnerId, weekStart, titleVi: input.titleVi.slice(0, 160) } });
+            if (dup) continue;
+            await this.taskRepo.save(this.taskRepo.create({
+                learnerId, weekStart, scheduledFor: today, taskType: input.taskType ?? 'drill', skill: input.skill, kc: input.kc ?? null,
+                refType: (input.taskType ?? 'drill') === 'drill' ? 'drill' : 'test', refId: null,
+                titleVi: input.titleVi.slice(0, 160), reasonVi: (input.reasonVi ?? 'Giáo viên giao cho nhóm cần củng cố dạng này.').slice(0, 240),
+                estMinutes: input.estMinutes ?? 15, priority: 1,
+            }));
+            created++;
+        }
+        return { created };
+    }
+
+    /** Writing error tags aggregated from ai_writing_gradings.errors_json (last 90 days). */
+    async writingErrors(learnerId: string): Promise<{ total: number; byType: Record<string, number>; recent: Array<Record<string, unknown>> }> {
+        const rows: Array<{ errors_json: any; graded_at: string }> = await this.dataSource.query(
+            `SELECT g.errors_json, g.graded_at FROM ai_writing_gradings g
+             JOIN writing_submissions ws ON ws.id = g.submission_id
+             WHERE ws.learner_id = $1 AND g.errors_json IS NOT NULL AND g.graded_at > now() - interval '90 days'
+             ORDER BY g.graded_at DESC LIMIT 20`,
+            [learnerId],
+        );
+        const byType: Record<string, number> = {};
+        const recent: Array<Record<string, unknown>> = [];
+        for (const r of rows) {
+            for (const [k, v] of Object.entries((r.errors_json?.byType ?? {}) as Record<string, number>)) byType[k] = (byType[k] ?? 0) + Number(v);
+            if (recent.length < 10) for (const it of (r.errors_json?.items ?? []) as Array<Record<string, unknown>>) { if (recent.length < 10) recent.push(it); }
+        }
+        return { total: Object.values(byType).reduce((a, b) => a + b, 0), byType, recent };
+    }
+
     // ── internals ────────────────────────────────────────────────────────────
 
     private summarise(weekStart: string, tasks: StudyTask[], generatedNow: boolean): WeekPlan {
