@@ -231,3 +231,19 @@ Missing or expired tokens return 401. The frontend Axios interceptor handles thi
 | GET | `/api/analytics/explanations?questionId&userAnswer` | signed-in | Giải thích tiếng Việt đã cache (null nếu chưa có) |
 | PUT | `/api/analytics/explanations` | system/admin/teacher | Upsert theo `(questionId, userAnswer)` |
 | POST | `/api/analytics/explanations/:id/vote` | signed-in | `{helpful: boolean}` |
+
+## Drills (test-service, `/api/drills`) — PR3
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| POST | `/api/drills/build` | learner | `{skill, questionType?, errorCause?, limit=8}` → `{items, meta}`; ~half from the mistake notebook (not `fixed`), rest fresh questions of the same type from published/public tests; no `test_attempts` row |
+| POST | `/api/drills/check?skill=` | learner | `{questionId, answer}` → `{isCorrect, correctAnswers, explanation, evidenceAnchor, errorCause, fromNotebook}`; notebook questions go through `POST /analytics/mistakes/review` (SRS), new wrong answers are recorded |
+
+## Study plan (analytics-service) — PR4
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | `/api/analytics/plan/:learnerId` | owner/teacher/admin | This week's plan; generated on first read from goals, band gaps, due reviews, weak question types |
+| POST | `/api/analytics/plan/:learnerId/regenerate` | owner | Deletes undone tasks of the week and rebuilds; done tasks stay |
+| PATCH | `/api/analytics/plan/tasks/:id/done` | owner | `{done, resultRef?}` |
+| GET | `/api/analytics/today/:learnerId` | owner/teacher/admin | Today's + overdue tasks, `dueReviews`, `streakDays`, band strip (`current/target/gap` per skill), `weeksLeft` |
+| POST | `/api/analytics/plan/rebuild-all` | system/admin | Cron entry point (e.g. Supabase pg_cron / Vercel cron on Monday 00:05): ensure every learner with goals has a plan |
+| POST | `/api/analytics/mistakes/review` | system | `{learnerId, questionId, correct}` → SRS step (`new`→`reviewing`→`fixed`; wrong resets) |

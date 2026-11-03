@@ -1,3 +1,6 @@
+import { StudyTask } from './plan/study-task.entity';
+import { PlanController } from './plan/plan.controller';
+import { PlanService } from './plan/plan.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -49,9 +52,10 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
             QuestionExplanation,
             LearnerMistake,
             LearnerProgressSnapshot,
+            StudyTask,
         ]),
     ],
-    controllers: [AnalyticsServiceController],
-    providers: [AnalyticsServiceService],
+    controllers: [AnalyticsServiceController, PlanController],
+    providers: [AnalyticsServiceService, PlanService],
 })
 export class AnalyticsServiceModule { }
