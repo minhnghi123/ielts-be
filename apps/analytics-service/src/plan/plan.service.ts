@@ -24,6 +24,11 @@ const TYPE_VI: Record<string, string> = {
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
 /** Monday-based week start, in UTC dates (plan dates are calendar days, not instants). */
+/** Identity of a task within a week; repeatable kinds (review/drill) include the KC so a different weakness is still issued. */
+export function taskKey(t: { taskType: string; skill: string | null; kc?: string | null }): string {
+    return `${t.taskType}:${t.skill ?? ''}${t.taskType === 'drill' ? `:${t.kc ?? ''}` : ''}`;
+}
+
 export function weekStartOf(d: Date): Date {
     const u = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
     const dow = (u.getUTCDay() + 6) % 7;
@@ -201,7 +206,7 @@ export class PlanService {
         if (days.length === 0) return [];
 
         const gap = (sk: Skill) => (s.goals && s.current[sk] != null ? round5(s.goals.targets[sk].target - s.current[sk]) : null);
-        const doneTypes = new Set(alreadyDone.map((t) => `${t.taskType}:${t.skill ?? ''}`));
+        const doneTypes = new Set(alreadyDone.map(taskKey));
         const cands: Candidate[] = [];
 
         if (!s.goals) {
@@ -235,8 +240,12 @@ export class PlanService {
             cands.push({ taskType: 'mock', skill: 'reading', kc: null, refType: 'test', titleVi: 'Làm 1 đề Reading để giữ phong độ', reasonVi: 'Bạn đã đạt mục tiêu ở mọi kỹ năng có dữ liệu; duy trì nhịp luyện.', estMinutes: 60, priority: 3, repeat: 1 });
         }
 
+        // Rebuild keeps done rows: never re-issue a one-off task the learner already ticked this week.
+        const kept = cands.filter((c) => !doneTypes.has(taskKey(c)));
+        if (kept.length === 0 && cands.length > 0) return [];
+
         // Expand repeats, then round-robin over days by priority within each day's budget.
-        const queue = cands.flatMap((c) => Array.from({ length: c.repeat }, () => c)).sort((a, b) => a.priority - b.priority);
+        const queue = kept.flatMap((c) => Array.from({ length: c.repeat }, () => c)).sort((a, b) => a.priority - b.priority);
         const budget = days.map(() => minutesPerDay);
         const placed: StudyTask[] = [];
         let dayIdx = 0;
