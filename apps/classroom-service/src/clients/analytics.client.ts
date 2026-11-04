@@ -14,6 +14,22 @@ export class AnalyticsClient {
     );
   }
 
+  async getMistakeSummary(learnerId: string): Promise<{ total: number; byCause: Record<string, number>; byQuestionType: Record<string, number>; byStatus: Record<string, number> } | null> {
+    return internalJson(this.logger, `${this.baseUrl}/analytics/mistakes/${learnerId}/summary`);
+  }
+
+  async getWritingErrors(learnerId: string): Promise<{ total: number; byType: Record<string, number> } | null> {
+    return internalJson(this.logger, `${this.baseUrl}/analytics/writing-errors/${learnerId}`);
+  }
+
+  async bulkAssignTasks(body: Record<string, unknown>): Promise<{ created: number } | null> {
+    return internalJson(this.logger, `${this.baseUrl}/analytics/plan/tasks/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
   async getBandProfiles(learnerId: string): Promise<unknown[]> {
     return (
       (await internalJson<unknown[]>(

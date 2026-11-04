@@ -82,13 +82,18 @@ export class PlanService {
         return this.summarise(weekStart, tasks, generatedNow);
     }
 
-    /** Drop undone tasks of the current week and rebuild from fresh signals; done tasks stay. */
+    /**
+     * Drop the learner's own undone tasks of the current week and rebuild from fresh signals.
+     * Done tasks and teacher-assigned tasks (ref_id = class id) stay; the generator treats both as already covered.
+     */
     async regenerate(learnerId: string, now = new Date()): Promise<WeekPlan> {
         const weekStart = isoDate(weekStartOf(now));
-        await this.taskRepo.createQueryBuilder().delete().where('learner_id = :learnerId AND week_start = :weekStart AND done_at IS NULL', { learnerId, weekStart }).execute();
-        const done = await this.taskRepo.find({ where: { learnerId, weekStart } });
-        const fresh = await this.generate(learnerId, now, done);
-        return this.summarise(weekStart, [...done, ...fresh].sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || a.priority - b.priority), true);
+        await this.taskRepo.createQueryBuilder().delete()
+            .where('learner_id = :learnerId AND week_start = :weekStart AND done_at IS NULL AND ref_id IS NULL', { learnerId, weekStart })
+            .execute();
+        const kept = await this.taskRepo.find({ where: { learnerId, weekStart } });
+        const fresh = await this.generate(learnerId, now, kept);
+        return this.summarise(weekStart, [...kept, ...fresh].sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || a.priority - b.priority), true);
     }
 
     async setDone(taskId: string, learnerId: string, done: boolean, resultRef?: string | null): Promise<StudyTask> {
@@ -130,6 +135,46 @@ export class PlanService {
                 gap: signals.goals && signals.current[skill] != null ? round5(signals.goals.targets[skill].target - signals.current[skill]) : null,
             })),
         };
+    }
+
+    /**
+     * Teacher-assigned drill → one task per learner in the current week (dedup by kc/skill/title).
+     * `classId` is stored in ref_id: generated tasks never set ref_id, so it marks the task as assigned.
+     */
+    async bulkAssign(input: { learnerIds: string[]; skill: string; kc?: string | null; titleVi: string; reasonVi?: string | null; estMinutes?: number; taskType?: StudyTaskType; classId?: string | null }, now = new Date()): Promise<{ created: number }> {
+        const weekStart = isoDate(weekStartOf(now));
+        const today = isoDate(now);
+        let created = 0;
+        for (const learnerId of new Set(input.learnerIds)) {
+            const dup = await this.taskRepo.findOne({ where: { learnerId, weekStart, titleVi: input.titleVi.slice(0, 160) } });
+            if (dup) continue;
+            await this.taskRepo.save(this.taskRepo.create({
+                learnerId, weekStart, scheduledFor: today, taskType: input.taskType ?? 'drill', skill: input.skill, kc: input.kc ?? null,
+                refType: (input.taskType ?? 'drill') === 'drill' ? 'drill' : 'test', refId: input.classId ?? null,
+                titleVi: input.titleVi.slice(0, 160), reasonVi: (input.reasonVi ?? 'Giáo viên giao cho nhóm cần củng cố dạng này.').slice(0, 240),
+                estMinutes: input.estMinutes ?? 15, priority: 1,
+            }));
+            created++;
+        }
+        return { created };
+    }
+
+    /** Writing error tags aggregated from ai_writing_gradings.errors_json (last 90 days). */
+    async writingErrors(learnerId: string): Promise<{ total: number; byType: Record<string, number>; recent: Array<Record<string, unknown>> }> {
+        const rows: Array<{ errors_json: any; graded_at: string }> = await this.dataSource.query(
+            `SELECT g.errors_json, g.graded_at FROM ai_writing_gradings g
+             JOIN writing_submissions ws ON ws.id = g.submission_id
+             WHERE ws.learner_id = $1 AND g.errors_json IS NOT NULL AND g.graded_at > now() - interval '90 days'
+             ORDER BY g.graded_at DESC LIMIT 20`,
+            [learnerId],
+        );
+        const byType: Record<string, number> = {};
+        const recent: Array<Record<string, unknown>> = [];
+        for (const r of rows) {
+            for (const [k, v] of Object.entries((r.errors_json?.byType ?? {}) as Record<string, number>)) byType[k] = (byType[k] ?? 0) + Number(v);
+            if (recent.length < 10) for (const it of (r.errors_json?.items ?? []) as Array<Record<string, unknown>>) { if (recent.length < 10) recent.push(it); }
+        }
+        return { total: Object.values(byType).reduce((a, b) => a + b, 0), byType, recent };
     }
 
     // ── internals ────────────────────────────────────────────────────────────

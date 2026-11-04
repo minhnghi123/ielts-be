@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, FindOptionsWhere } from 'typeorm';
@@ -1032,6 +1033,68 @@ export class ClassroomServiceService {
   }
 
   // ─── Gradebook & submissions ──────────────────────────────────────────────
+
+
+  /** Class heatmap: per student band per skill + top error causes / weak question types + writing error tags. */
+  async heatmap(classId: string, user: RequestUser | null) {
+    await this.requireOwner(classId, user);
+    const learnerIds = await this.activeMemberIds(classId);
+    const info = await this.authClient.getLearners(learnerIds);
+    const rows = await Promise.all(
+      learnerIds.map(async (learnerId) => {
+        const [profiles, mistakes, writing] = await Promise.all([
+          this.analyticsClient.getBandProfiles(learnerId) as Promise<Array<{ skill: string; currentBand?: number | string | null; targetBand?: number | string | null }>>,
+          this.analyticsClient.getMistakeSummary(learnerId),
+          this.analyticsClient.getWritingErrors(learnerId),
+        ]);
+        const bands: Record<string, { current: number | null; target: number | null }> = {};
+        for (const p of profiles ?? []) bands[p.skill] = { current: p.currentBand != null ? Number(p.currentBand) : null, target: p.targetBand != null ? Number(p.targetBand) : null };
+        const top = (o: Record<string, number> | undefined, n: number) => Object.entries(o ?? {}).sort((a, b) => b[1] - a[1]).slice(0, n).map(([key, count]) => ({ key, count }));
+        const li = info.get(learnerId);
+        return {
+          learnerId,
+          fullName: li?.fullName ?? null,
+          email: li?.email ?? null,
+          bands,
+          openMistakes: (mistakes?.total ?? 0) - (mistakes?.byStatus?.fixed ?? 0),
+          topCauses: top(mistakes?.byCause, 3),
+          weakTypes: top(mistakes?.byQuestionType, 3),
+          writingErrors: top(writing?.byType, 3),
+        };
+      }),
+    );
+    const agg = (pick: (r: (typeof rows)[number]) => Array<{ key: string; count: number }>) => {
+      const m = new Map<string, { count: number; learners: string[] }>();
+      for (const r of rows) for (const { key, count } of pick(r)) { const e = m.get(key) ?? { count: 0, learners: [] }; e.count += count; e.learners.push(r.learnerId); m.set(key, e); }
+      return [...m.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.count - a.count).slice(0, 5);
+    };
+    return { rows, classWeakTypes: agg((r) => r.weakTypes), classTopCauses: agg((r) => r.topCauses), classWritingErrors: agg((r) => r.writingErrors) };
+  }
+
+  /** Push a targeted drill into the selected students' weekly plans. */
+  async assignDrill(classId: string, user: RequestUser | null, dto: { learnerIds: string[]; skill: string; questionType?: string; note?: string }) {
+    await this.requireOwner(classId, user);
+    const members = new Set(await this.activeMemberIds(classId));
+    const learnerIds = dto.learnerIds.filter((id) => members.has(id));
+    if (learnerIds.length === 0) throw new BadRequestException('No active students selected');
+    const isDrill = dto.skill === 'listening' || dto.skill === 'reading';
+    const typeVi = dto.questionType ? dto.questionType.replace(/_/g, ' ') : null;
+    const titleVi = isDrill
+      ? `Luyện ${typeVi ?? dto.skill} theo yêu cầu giáo viên`
+      : `Làm 1 bài ${dto.skill === 'writing' ? 'Writing' : 'Speaking'} theo yêu cầu giáo viên`;
+    const res = await this.analyticsClient.bulkAssignTasks({
+      learnerIds,
+      skill: dto.skill,
+      kc: isDrill ? dto.questionType ?? null : null,
+      titleVi,
+      reasonVi: dto.note?.trim() || 'Giáo viên giao cho nhóm cần củng cố dạng này.',
+      estMinutes: isDrill ? 15 : 40,
+      taskType: isDrill ? 'drill' : dto.skill,
+      classId,
+    });
+    if (!res) throw new ServiceUnavailableException('Không giao được bài: dịch vụ kế hoạch học không phản hồi, hãy thử lại.');
+    return { assigned: learnerIds.length, created: res.created };
+  }
 
   async gradebook(classId: string, user: RequestUser | null, skill?: string) {
     await this.requireOwner(classId, user);

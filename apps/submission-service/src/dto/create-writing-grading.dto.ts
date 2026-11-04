@@ -57,4 +57,9 @@ export class CreateWritingGradingDto {
     @IsOptional()
     @IsNumber()
     confidenceScore?: number;
+
+    @ApiPropertyOptional({ description: 'Tagged writing errors: { byType: {Grammar: n,...}, items: [{task, error_type, original_text, correction, explanation_vi}] }' })
+    @IsOptional()
+    @IsObject()
+    errorsJson?: Record<string, any>;
 }

@@ -321,3 +321,24 @@ export class UpdatePostDto extends CreatePostDto {
   @MaxLength(10000)
   declare body: string;
 }
+
+export class AssignDrillDto {
+  @ApiProperty({ type: [String], description: 'Learner profile ids in this class' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  learnerIds: string[];
+
+  @ApiProperty({ enum: ['listening', 'reading', 'writing', 'speaking'] })
+  @IsIn(['listening', 'reading', 'writing', 'speaking'])
+  skill: string;
+
+  @ApiPropertyOptional({ description: 'Canonical question type for drills' })
+  @IsOptional()
+  @IsString()
+  questionType?: string;
+
+  @ApiPropertyOptional({ description: 'Vietnamese note shown as the task reason' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}

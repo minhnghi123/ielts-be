@@ -42,6 +42,9 @@ export class AiWritingGrading {
     @Column({ type: 'jsonb', nullable: true })
     feedback: Record<string, any>;
 
+    @Column({ name: 'errors_json', type: 'jsonb', nullable: true })
+    errorsJson: Record<string, any> | null;
+
     @Column({ name: 'confidence_score', type: 'decimal', precision: 3, scale: 2, nullable: true })
     confidenceScore: number;
 
