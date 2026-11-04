@@ -1,3 +1,6 @@
+import { StudyTask } from './plan/study-task.entity';
+import { PlanController } from './plan/plan.controller';
+import { PlanService } from './plan/plan.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -30,7 +33,7 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
                     password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
                     database: config.get<string>('DB_NAME') || process.env.DB_NAME,
                     ssl: { rejectUnauthorized: false },
-                    entities: [LearnerBandProfile, LearnerMistake, LearnerProgressSnapshot, LearnerGoal, QuestionExplanation],
+                    autoLoadEntities: true,
                     synchronize: false,
                     // Connection pool settings for Supabase PgBouncer (transaction mode)
                     extra: {
@@ -49,9 +52,10 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
             QuestionExplanation,
             LearnerMistake,
             LearnerProgressSnapshot,
+            StudyTask,
         ]),
     ],
-    controllers: [AnalyticsServiceController],
-    providers: [AnalyticsServiceService],
+    controllers: [AnalyticsServiceController, PlanController],
+    providers: [AnalyticsServiceService, PlanService],
 })
 export class AnalyticsServiceModule { }
