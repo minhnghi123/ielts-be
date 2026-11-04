@@ -33,7 +33,7 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
                     password: config.get<string>('DB_PASSWORD') || process.env.DB_PASSWORD,
                     database: config.get<string>('DB_NAME') || process.env.DB_NAME,
                     ssl: { rejectUnauthorized: false },
-                    entities: [LearnerBandProfile, LearnerMistake, LearnerProgressSnapshot, LearnerGoal, QuestionExplanation],
+                    autoLoadEntities: true,
                     synchronize: false,
                     // Connection pool settings for Supabase PgBouncer (transaction mode)
                     extra: {
