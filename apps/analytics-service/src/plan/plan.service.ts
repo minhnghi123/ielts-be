@@ -25,6 +25,9 @@ const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
 /** Monday-based week start, in UTC dates (plan dates are calendar days, not instants). */
 /** Identity of a task within a week; repeatable kinds (review/drill) include the KC so a different weakness is still issued. */
+/** Teacher-assigned tasks carry priority 0 so they sort first and survive "Lập lại kế hoạch". */
+export const ASSIGNED_PRIORITY = 0;
+
 export function taskKey(t: { taskType: string; skill: string | null; kc?: string | null }): string {
     return `${t.taskType}:${t.skill ?? ''}${t.taskType === 'drill' ? `:${t.kc ?? ''}` : ''}`;
 }
@@ -82,13 +85,18 @@ export class PlanService {
         return this.summarise(weekStart, tasks, generatedNow);
     }
 
-    /** Drop undone tasks of the current week and rebuild from fresh signals; done tasks stay. */
+    /**
+     * Drop the learner's own undone tasks of the current week and rebuild from fresh signals.
+     * Done tasks and teacher-assigned tasks (priority 0) stay; the generator treats both as already covered.
+     */
     async regenerate(learnerId: string, now = new Date()): Promise<WeekPlan> {
         const weekStart = isoDate(weekStartOf(now));
-        await this.taskRepo.createQueryBuilder().delete().where('learner_id = :learnerId AND week_start = :weekStart AND done_at IS NULL', { learnerId, weekStart }).execute();
-        const done = await this.taskRepo.find({ where: { learnerId, weekStart } });
-        const fresh = await this.generate(learnerId, now, done);
-        return this.summarise(weekStart, [...done, ...fresh].sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || a.priority - b.priority), true);
+        await this.taskRepo.createQueryBuilder().delete()
+            .where('learner_id = :learnerId AND week_start = :weekStart AND done_at IS NULL AND priority > :assigned', { learnerId, weekStart, assigned: ASSIGNED_PRIORITY })
+            .execute();
+        const kept = await this.taskRepo.find({ where: { learnerId, weekStart } });
+        const fresh = await this.generate(learnerId, now, kept);
+        return this.summarise(weekStart, [...kept, ...fresh].sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor) || a.priority - b.priority), true);
     }
 
     async setDone(taskId: string, learnerId: string, done: boolean, resultRef?: string | null): Promise<StudyTask> {
@@ -144,7 +152,7 @@ export class PlanService {
                 learnerId, weekStart, scheduledFor: today, taskType: input.taskType ?? 'drill', skill: input.skill, kc: input.kc ?? null,
                 refType: (input.taskType ?? 'drill') === 'drill' ? 'drill' : 'test', refId: null,
                 titleVi: input.titleVi.slice(0, 160), reasonVi: (input.reasonVi ?? 'Giáo viên giao cho nhóm cần củng cố dạng này.').slice(0, 240),
-                estMinutes: input.estMinutes ?? 15, priority: 1,
+                estMinutes: input.estMinutes ?? 15, priority: ASSIGNED_PRIORITY,
             }));
             created++;
         }
