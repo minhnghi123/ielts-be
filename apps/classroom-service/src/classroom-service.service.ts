@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, FindOptionsWhere } from 'typeorm';
@@ -1089,8 +1090,10 @@ export class ClassroomServiceService {
       reasonVi: dto.note?.trim() || 'Giáo viên giao cho nhóm cần củng cố dạng này.',
       estMinutes: isDrill ? 15 : 40,
       taskType: isDrill ? 'drill' : dto.skill,
+      classId,
     });
-    return { assigned: learnerIds.length, created: res?.created ?? 0 };
+    if (!res) throw new ServiceUnavailableException('Không giao được bài: dịch vụ kế hoạch học không phản hồi, hãy thử lại.');
+    return { assigned: learnerIds.length, created: res.created };
   }
 
   async gradebook(classId: string, user: RequestUser | null, skill?: string) {
