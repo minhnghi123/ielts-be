@@ -19,6 +19,7 @@ export class BulkAssignDto {
     @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(240) reasonVi?: string;
     @ApiPropertyOptional() @IsOptional() @IsInt() @Min(5) @Max(180) estMinutes?: number;
     @ApiPropertyOptional({ enum: ['drill', 'mock', 'writing', 'speaking'] }) @IsOptional() @IsIn(['drill', 'mock', 'writing', 'speaking']) taskType?: 'drill' | 'mock' | 'writing' | 'speaking';
+    @ApiPropertyOptional({ description: 'Class that assigned the task; stored in ref_id so the task survives plan rebuilds' }) @IsOptional() @IsUUID('4') classId?: string;
 }
 
 @ApiTags('Analytics')
