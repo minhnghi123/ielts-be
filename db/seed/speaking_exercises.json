@@ -1,0 +1,1192 @@
+[
+ {
+  "level": "word",
+  "text": "think",
+  "ipa": "/θɪŋk/",
+  "targetSounds": [
+   "TH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "three",
+  "ipa": "/θriː/",
+  "targetSounds": [
+   "TH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "thank",
+  "ipa": "/θæŋk/",
+  "targetSounds": [
+   "TH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "month",
+  "ipa": "/mʌnθ/",
+  "targetSounds": [
+   "TH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "health",
+  "ipa": "/helθ/",
+  "targetSounds": [
+   "TH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "author",
+  "ipa": "/ˈɔːθə/",
+  "targetSounds": [
+   "TH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "this",
+  "ipa": "/ðɪs/",
+  "targetSounds": [
+   "DH"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "that",
+  "ipa": "/ðæt/",
+  "targetSounds": [
+   "DH"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "mother",
+  "ipa": "/ˈmʌðə/",
+  "targetSounds": [
+   "DH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "weather",
+  "ipa": "/ˈweðə/",
+  "targetSounds": [
+   "DH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "she",
+  "ipa": "/ʃiː/",
+  "targetSounds": [
+   "SH"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "sure",
+  "ipa": "/ʃʊə/",
+  "targetSounds": [
+   "SH"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "usually",
+  "ipa": "/ˈjuːʒuəli/",
+  "targetSounds": [
+   "ZH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "measure",
+  "ipa": "/ˈmeʒə/",
+  "targetSounds": [
+   "ZH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "chair",
+  "ipa": "/tʃeə/",
+  "targetSounds": [
+   "CH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "teacher",
+  "ipa": "/ˈtiːtʃə/",
+  "targetSounds": [
+   "CH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "job",
+  "ipa": "/dʒɒb/",
+  "targetSounds": [
+   "JH"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "language",
+  "ipa": "/ˈlæŋɡwɪdʒ/",
+  "targetSounds": [
+   "JH"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "zoo",
+  "ipa": "/zuː/",
+  "targetSounds": [
+   "Z"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "because",
+  "ipa": "/bɪˈkɒz/",
+  "targetSounds": [
+   "Z"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "books",
+  "ipa": "/bʊks/",
+  "targetSounds": [
+   "S"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "students",
+  "ipa": "/ˈstjuːdənts/",
+  "targetSounds": [
+   "S"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "night",
+  "ipa": "/naɪt/",
+  "targetSounds": [
+   "T"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "want",
+  "ipa": "/wɒnt/",
+  "targetSounds": [
+   "T"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "need",
+  "ipa": "/niːd/",
+  "targetSounds": [
+   "D"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "played",
+  "ipa": "/pleɪd/",
+  "targetSounds": [
+   "D"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "book",
+  "ipa": "/bʊk/",
+  "targetSounds": [
+   "K"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "very",
+  "ipa": "/ˈveri/",
+  "targetSounds": [
+   "V"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "travel",
+  "ipa": "/ˈtrævəl/",
+  "targetSounds": [
+   "V"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "we",
+  "ipa": "/wiː/",
+  "targetSounds": [
+   "W"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "world",
+  "ipa": "/wɜːld/",
+  "targetSounds": [
+   "W"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "really",
+  "ipa": "/ˈrɪəli/",
+  "targetSounds": [
+   "R"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "feel",
+  "ipa": "/fiːl/",
+  "targetSounds": [
+   "L"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "school",
+  "ipa": "/skuːl/",
+  "targetSounds": [
+   "L"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "sing",
+  "ipa": "/sɪŋ/",
+  "targetSounds": [
+   "NG"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "sheep",
+  "ipa": "/ʃiːp/",
+  "targetSounds": [
+   "IY"
+  ],
+  "topic": "sounds",
+  "difficulty": 2
+ },
+ {
+  "level": "word",
+  "text": "ship",
+  "ipa": "/ʃɪp/",
+  "targetSounds": [
+   "IH"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "cat",
+  "ipa": "/kæt/",
+  "targetSounds": [
+   "AE"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "bird",
+  "ipa": "/bɜːd/",
+  "targetSounds": [
+   "ER"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "word",
+  "text": "go",
+  "ipa": "/ɡəʊ/",
+  "targetSounds": [
+   "OW"
+  ],
+  "topic": "sounds",
+  "difficulty": 1
+ },
+ {
+  "level": "sentence_build",
+  "text": "I usually study English in the evening.",
+  "targetSounds": [
+   "Z",
+   "SH"
+  ],
+  "topic": "daily life",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "She has lived in Hanoi for three years.",
+  "targetSounds": [
+   "TH",
+   "D"
+  ],
+  "topic": "home",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence_build",
+  "text": "My brother works as a teacher.",
+  "targetSounds": [
+   "DH",
+   "CH"
+  ],
+  "topic": "family",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "We often eat breakfast together.",
+  "targetSounds": [
+   "W",
+   "T"
+  ],
+  "topic": "food",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "The weather is very hot in summer.",
+  "targetSounds": [
+   "DH",
+   "V"
+  ],
+  "topic": "weather",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "I would like to travel to Japan.",
+  "targetSounds": [
+   "W",
+   "V"
+  ],
+  "topic": "travel",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Reading books helps me relax.",
+  "targetSounds": [
+   "S",
+   "K"
+  ],
+  "topic": "hobbies",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "They played football last weekend.",
+  "targetSounds": [
+   "D",
+   "L"
+  ],
+  "topic": "sport",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "This city is famous for its food.",
+  "targetSounds": [
+   "DH",
+   "S"
+  ],
+  "topic": "hometown",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "I think public transport is convenient.",
+  "targetSounds": [
+   "TH",
+   "T"
+  ],
+  "topic": "transport",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Students should learn a second language.",
+  "targetSounds": [
+   "S",
+   "JH"
+  ],
+  "topic": "education",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Technology changes the way we work.",
+  "targetSounds": [
+   "CH",
+   "W"
+  ],
+  "topic": "technology",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Many people prefer shopping online.",
+  "targetSounds": [
+   "SH",
+   "NG"
+  ],
+  "topic": "shopping",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Music helps me concentrate when I study.",
+  "targetSounds": [
+   "Z",
+   "S"
+  ],
+  "topic": "music",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Exercise is important for good health.",
+  "targetSounds": [
+   "Z",
+   "TH"
+  ],
+  "topic": "health",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "The museum was closed on Monday.",
+  "targetSounds": [
+   "Z",
+   "D"
+  ],
+  "topic": "culture",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "I have never been abroad before.",
+  "targetSounds": [
+   "V",
+   "D"
+  ],
+  "topic": "travel",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Our teacher gave us a lot of homework.",
+  "targetSounds": [
+   "CH",
+   "V"
+  ],
+  "topic": "education",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence_build",
+  "text": "Living in a big city can be stressful.",
+  "targetSounds": [
+   "NG",
+   "S"
+  ],
+  "topic": "city",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence_build",
+  "text": "Children need enough sleep every night.",
+  "targetSounds": [
+   "CH",
+   "T"
+  ],
+  "topic": "health",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "I enjoy cooking traditional dishes.",
+  "targetSounds": [
+   "JH",
+   "SH"
+  ],
+  "topic": "food",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "The library opens at eight in the morning.",
+  "targetSounds": [
+   "TH",
+   "NG"
+  ],
+  "topic": "daily life",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence_build",
+  "text": "We should protect the environment.",
+  "targetSounds": [
+   "SH",
+   "T"
+  ],
+  "topic": "environment",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "My favourite season is autumn.",
+  "targetSounds": [
+   "V",
+   "T"
+  ],
+  "topic": "weather",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "I usually walk to work with my friend.",
+  "targetSounds": [
+   "Z",
+   "K"
+  ],
+  "topic": "work",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence_build",
+  "text": "Social media wastes a lot of time.",
+  "targetSounds": [
+   "SH",
+   "S"
+  ],
+  "topic": "technology",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "He is the tallest person in our class.",
+  "targetSounds": [
+   "DH",
+   "S"
+  ],
+  "topic": "people",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence_build",
+  "text": "There are many parks near my house.",
+  "targetSounds": [
+   "DH",
+   "K"
+  ],
+  "topic": "hometown",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "I would rather read than watch TV.",
+  "targetSounds": [
+   "DH",
+   "CH"
+  ],
+  "topic": "hobbies",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence_build",
+  "text": "Learning English takes time and patience.",
+  "targetSounds": [
+   "NG",
+   "SH"
+  ],
+  "topic": "education",
+  "difficulty": 2
+ },
+ {
+  "level": "sentence",
+  "text": "I grew up in a small town by the sea, where most people worked as fishermen or ran family shops.",
+  "targetSounds": [
+   "TH",
+   "SH",
+   "S"
+  ],
+  "topic": "hometown",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "These days I spend about two hours a day studying English, mostly in the evening after work.",
+  "targetSounds": [
+   "DH",
+   "Z",
+   "NG"
+  ],
+  "topic": "daily life",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "Although the city is crowded, I think the public transport system is reliable and cheap.",
+  "targetSounds": [
+   "TH",
+   "CH",
+   "S"
+  ],
+  "topic": "transport",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "My mother taught me how to cook when I was a child, and I still use her recipes today.",
+  "targetSounds": [
+   "DH",
+   "CH",
+   "D"
+  ],
+  "topic": "family",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "In my opinion, young people should travel abroad at least once before they finish university.",
+  "targetSounds": [
+   "SH",
+   "V",
+   "TH"
+  ],
+  "topic": "travel",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "The weather in the north is quite different: winters are cold and summers are extremely hot.",
+  "targetSounds": [
+   "DH",
+   "W",
+   "T"
+  ],
+  "topic": "weather",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "I usually relax by listening to music or reading novels, especially at the weekend.",
+  "targetSounds": [
+   "Z",
+   "NG",
+   "S"
+  ],
+  "topic": "hobbies",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Technology has changed the way we communicate with friends and family who live far away.",
+  "targetSounds": [
+   "CH",
+   "W",
+   "V"
+  ],
+  "topic": "technology",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Our school had a large library with thousands of books in both Vietnamese and English.",
+  "targetSounds": [
+   "TH",
+   "S",
+   "K"
+  ],
+  "topic": "education",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Eating healthy food and doing exercise regularly are the best ways to stay fit.",
+  "targetSounds": [
+   "TH",
+   "Z",
+   "L"
+  ],
+  "topic": "health",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "The most memorable trip I have ever taken was a week in the mountains with my closest friends.",
+  "targetSounds": [
+   "DH",
+   "V",
+   "S"
+  ],
+  "topic": "travel",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "Shopping online is convenient, but I still prefer to see and touch things before I buy them.",
+  "targetSounds": [
+   "SH",
+   "CH",
+   "TH"
+  ],
+  "topic": "shopping",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "Many students choose to study abroad because they believe it will improve their career prospects.",
+  "targetSounds": [
+   "CH",
+   "V",
+   "TH"
+  ],
+  "topic": "education",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "My neighbourhood is quiet during the week, but it becomes very lively on Saturday nights.",
+  "targetSounds": [
+   "Z",
+   "V",
+   "T"
+  ],
+  "topic": "hometown",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "I think governments should invest more money in renewable energy such as wind and solar power.",
+  "targetSounds": [
+   "TH",
+   "V",
+   "W"
+  ],
+  "topic": "environment",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Working from home saves time, although it can be difficult to separate work from personal life.",
+  "targetSounds": [
+   "W",
+   "T",
+   "L"
+  ],
+  "topic": "work",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "The festival attracts visitors from all over the country with its music, food and fireworks.",
+  "targetSounds": [
+   "Z",
+   "S",
+   "K"
+  ],
+  "topic": "culture",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "When I was younger, I wanted to become a pilot because I loved watching planes take off.",
+  "targetSounds": [
+   "W",
+   "D",
+   "CH"
+  ],
+  "topic": "childhood",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "Reading the news every morning helps me understand what is happening around the world.",
+  "targetSounds": [
+   "DH",
+   "NG",
+   "W"
+  ],
+  "topic": "daily life",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "I believe that learning a foreign language opens doors to new cultures and opportunities.",
+  "targetSounds": [
+   "TH",
+   "JH",
+   "S"
+  ],
+  "topic": "education",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "The restaurant near my office serves delicious noodles at a very reasonable price.",
+  "targetSounds": [
+   "Z",
+   "SH",
+   "V"
+  ],
+  "topic": "food",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Public parks are important because they give city residents a place to exercise and relax.",
+  "targetSounds": [
+   "K",
+   "Z",
+   "S"
+  ],
+  "topic": "city",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "My grandfather told me stories about the village where he lived as a young man.",
+  "targetSounds": [
+   "DH",
+   "L",
+   "V"
+  ],
+  "topic": "family",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Air pollution has become a serious problem in many large cities in Asia.",
+  "targetSounds": [
+   "SH",
+   "S",
+   "ZH"
+  ],
+  "topic": "environment",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "I would love to visit Australia one day to see the beaches and the wildlife.",
+  "targetSounds": [
+   "W",
+   "V",
+   "TH"
+  ],
+  "topic": "travel",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Teachers play an essential role in shaping the character of their students.",
+  "targetSounds": [
+   "CH",
+   "SH",
+   "S"
+  ],
+  "topic": "education",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "Although fast food is convenient, it is usually unhealthy and expensive in the long run.",
+  "targetSounds": [
+   "TH",
+   "ZH",
+   "V"
+  ],
+  "topic": "food",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "The internet allows people to work, study and shop without leaving their homes.",
+  "targetSounds": [
+   "TH",
+   "W",
+   "DH"
+  ],
+  "topic": "technology",
+  "difficulty": 3
+ },
+ {
+  "level": "sentence",
+  "text": "I have been playing the guitar for five years, and it still brings me a lot of joy.",
+  "targetSounds": [
+   "V",
+   "NG",
+   "JH"
+  ],
+  "topic": "hobbies",
+  "difficulty": 4
+ },
+ {
+  "level": "sentence",
+  "text": "Living with my parents has advantages, but I also want more independence in the future.",
+  "targetSounds": [
+   "DH",
+   "V",
+   "CH"
+  ],
+  "topic": "family",
+  "difficulty": 3
+ },
+ {
+  "level": "free",
+  "text": "Do you work or are you a student?",
+  "topic": "work",
+  "difficulty": 2,
+  "sampleAnswer": "I'm currently a student at Thu Dau Mot University, where I'm majoring in information technology. I'm in my final year, so most of my time goes into my graduation project.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What do you like most about your hometown?",
+  "topic": "hometown",
+  "difficulty": 2,
+  "sampleAnswer": "What I love most about my hometown is how peaceful it is. It's a small town surrounded by rice fields, and people there know each other, so it always feels safe and friendly.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "How do you usually spend your weekends?",
+  "topic": "daily life",
+  "difficulty": 2,
+  "sampleAnswer": "On weekends I normally sleep in, then meet friends for coffee. In the afternoon I either play football or catch up on study, and Sunday evenings are for my family.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you prefer reading books or watching films?",
+  "topic": "hobbies",
+  "difficulty": 2,
+  "sampleAnswer": "I'd say I prefer films because they're easier to enjoy after a long day. That said, I do read before bed, mostly short non-fiction, because it helps me fall asleep.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What kind of weather do you like?",
+  "topic": "weather",
+  "difficulty": 2,
+  "sampleAnswer": "I like cool, dry weather, which is rare where I live. Around December the temperature drops a little and the air feels fresh, so I spend more time outdoors.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you think it is important to learn a foreign language?",
+  "topic": "education",
+  "difficulty": 2,
+  "sampleAnswer": "Definitely. A foreign language opens up job opportunities and lets you understand other cultures. For me, English is essential because most technical documentation is written in it.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "How often do you use public transport?",
+  "topic": "transport",
+  "difficulty": 2,
+  "sampleAnswer": "Not very often, to be honest. I usually ride my motorbike because the bus routes near my house are limited, but I do take the bus when I travel to the city centre.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What is your favourite food?",
+  "topic": "food",
+  "difficulty": 2,
+  "sampleAnswer": "My favourite dish is phở, especially the version my mother makes. The broth takes hours to prepare, and the flavour is something I've never found in a restaurant.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you like shopping?",
+  "topic": "shopping",
+  "difficulty": 2,
+  "sampleAnswer": "I enjoy it in small doses. I like browsing bookshops and electronics stores, but I find clothes shopping tiring, so I usually buy clothes online.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "How do you keep healthy?",
+  "topic": "health",
+  "difficulty": 2,
+  "sampleAnswer": "I try to exercise three times a week, mostly running and some basic weight training. I also avoid sugary drinks, although I'm not always successful.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you prefer to study alone or with others?",
+  "topic": "education",
+  "difficulty": 2,
+  "sampleAnswer": "It depends on the subject. For programming I prefer studying alone so I can focus, but for theory I like group discussions because explaining things to others helps me remember.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What technology do you use every day?",
+  "topic": "technology",
+  "difficulty": 2,
+  "sampleAnswer": "My phone and laptop are the two devices I can't live without. I use my laptop for coding and my phone for messaging, maps and checking the news.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Is music important in your life?",
+  "topic": "music",
+  "difficulty": 2,
+  "sampleAnswer": "Yes, quite important. I listen to music whenever I study or commute, and it changes my mood instantly. I'm trying to learn the guitar as well.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you like travelling?",
+  "topic": "travel",
+  "difficulty": 2,
+  "sampleAnswer": "I love it, although I haven't travelled much yet. So far my favourite trip was to Da Lat because of the cool climate and the pine forests.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What do you do to relax after a busy day?",
+  "topic": "daily life",
+  "difficulty": 2,
+  "sampleAnswer": "I usually take a short walk and then cook something simple. Cooking forces me to stop thinking about work, and eating a proper meal makes me feel better.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you spend much time with your family?",
+  "topic": "family",
+  "difficulty": 2,
+  "sampleAnswer": "Yes, I live with my parents, so we have dinner together almost every day. On Sundays we often visit my grandparents, which is something I really value.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What sports are popular in your country?",
+  "topic": "sport",
+  "difficulty": 2,
+  "sampleAnswer": "Football is by far the most popular sport in Vietnam. People watch the national team together in cafés, and almost every neighbourhood has a small pitch.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Do you think people should protect the environment?",
+  "topic": "environment",
+  "difficulty": 2,
+  "sampleAnswer": "Absolutely. Small actions like using fewer plastic bags matter, but governments also need to invest in clean energy and public transport to make a real difference.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "What was your favourite subject at school?",
+  "topic": "childhood",
+  "difficulty": 2,
+  "sampleAnswer": "My favourite subject was maths because I liked solving problems step by step. It's probably why I ended up studying computer science.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ },
+ {
+  "level": "free",
+  "text": "Would you like to live in a big city in the future?",
+  "topic": "city",
+  "difficulty": 2,
+  "sampleAnswer": "For a few years, yes, because big cities have more job opportunities. In the long term, though, I'd prefer somewhere quieter with cleaner air.",
+  "tipVi": "Trả lời 30–45 giây: nêu ý chính, thêm 1 lý do và 1 ví dụ cụ thể."
+ }
+]

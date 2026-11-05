@@ -3,6 +3,10 @@ import { SavedWord } from './mastery/saved-word.entity';
 import { MasteryController } from './mastery/mastery.controller';
 import { MasteryService } from './mastery/mastery.service';
 import { StudyTask } from './plan/study-task.entity';
+import { SpeakingExercise } from './speaking/speaking-exercise.entity';
+import { SpeakingAttempt } from './speaking/speaking-attempt.entity';
+import { SpeakingService } from './speaking/speaking.service';
+import { SpeakingController } from './speaking/speaking.controller';
 import { PlanController } from './plan/plan.controller';
 import { PlanService } from './plan/plan.service';
 import { Module } from '@nestjs/common';
@@ -59,9 +63,11 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
             StudyTask,
             KcRating,
             SavedWord,
+            SpeakingExercise,
+            SpeakingAttempt,
         ]),
     ],
-    controllers: [AnalyticsServiceController, PlanController, MasteryController],
-    providers: [AnalyticsServiceService, PlanService, MasteryService],
+    controllers: [AnalyticsServiceController, PlanController, MasteryController, SpeakingController],
+    providers: [AnalyticsServiceService, PlanService, MasteryService, SpeakingService],
 })
 export class AnalyticsServiceModule { }
