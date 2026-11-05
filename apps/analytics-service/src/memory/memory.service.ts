@@ -56,10 +56,11 @@ export class MemoryService {
         const all = [...wordItems, ...mistakeItems].sort((a, b) => a.pRecall - b.pRecall);
         const atRisk = all.filter((x) => x.pRecall < 0.7);
         const params = await this.paramsRepo.findOne({ where: { learnerId } });
+        const [{ n }]: Array<{ n: string }> = await this.dataSource.query(`SELECT count(*) n FROM memory_reviews WHERE learner_id = $1`, [learnerId]);
         return {
             items: all.slice(0, 50),
             counts: { words: wordItems.length, mistakes: mistakeItems.length, atRiskWords: atRisk.filter((x) => x.type === 'word').length, atRiskMistakes: atRisk.filter((x) => x.type === 'mistake').length },
-            model: { scale, nObs: params?.nObs ?? 0, logLoss: params?.logLoss != null ? Number(params.logLoss) : null, fittedAt: params?.fittedAt ?? null, minObs: MIN_OBS_FOR_FIT },
+            model: { scale, nObs: Number(n), fittedOn: params?.nObs ?? 0, logLoss: params?.logLoss != null ? Number(params.logLoss) : null, fittedAt: params?.fittedAt ?? null, minObs: MIN_OBS_FOR_FIT },
         };
     }
 
