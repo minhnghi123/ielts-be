@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { MemoryService } from './memory/memory.service';
 import { DataSource, Repository } from 'typeorm';
 import { LearnerBandProfile } from './entities/learner-band-profile.entity';
 import { LearnerMistake } from './entities/learner-mistake.entity';
@@ -89,6 +90,7 @@ export class AnalyticsServiceService {
         @InjectRepository(QuestionExplanation)
         private readonly explanationRepo: Repository<QuestionExplanation>,
         private readonly dataSource: DataSource,
+        private readonly memory: MemoryService,
     ) { }
 
     // ─── Mistake notebook ─────────────────────────────────────────────────────────
@@ -105,7 +107,7 @@ export class AnalyticsServiceService {
             qb.andWhere('(m.question_type = :qt OR m.mistake_type = :qt)', { qt });
         }
         if (filters.attemptId) qb.andWhere('m.attempt_id = :attemptId', { attemptId: filters.attemptId });
-        if (filters.dueOnly) qb.andWhere("m.status <> 'fixed' AND (m.next_review_at IS NULL OR m.next_review_at <= now())");
+        if (filters.dueOnly) qb.andWhere("m.status <> 'fixed' AND (m.next_review_at IS NULL OR m.next_review_at <= now() OR COALESCE(m.last_reviewed_at, m.created_at) < now() - (0.515 * COALESCE(m.half_life_h, 24)) * interval '1 hour')"); // due, or predicted recall < 0.7 (2^(-lag/h) < 0.7 ⇔ lag > 0.515·h)
         return qb.orderBy('m.created_at', 'DESC').limit(500).getMany();
     }
 
@@ -128,21 +130,24 @@ export class AnalyticsServiceService {
         if (rows.length === 0) return null;
         const now = new Date();
         for (const m of rows) {
+            // Forgetting model decides *when* (needs the previous lastReviewedAt as lag anchor, so call it before mutating);
+            // the notebook status still needs two consecutive successes to become "fixed".
+            const u = await this.memory.review(learnerId, 'mistake', m.id, m, correct ? 'good' : 'again', now);
             m.reviewCount += 1;
             m.lastReviewedAt = now;
             m.updatedAt = now;
             if (hintLevel != null) m.hintLevel = hintLevel;
+            m.correctCount = u.correctCount;
+            m.lapseCount = u.lapseCount;
+            m.halfLifeH = u.halfLifeH;
+            m.nextReviewAt = u.nextReviewAt;
+            m.srsIntervalDays = Math.max(1, Math.round(u.halfLifeH / 24));
             if (correct) {
                 const consecutive = m.status === 'reviewing' ? 2 : 1;
-                m.srsIntervalDays = Math.max(1, Math.round(m.srsIntervalDays * (m.status === 'new' ? 1 : m.srsEase)));
-                if (m.status === 'new') m.srsIntervalDays = 2;
                 m.status = consecutive >= 2 ? 'fixed' : 'reviewing';
-                m.nextReviewAt = new Date(now.getTime() + m.srsIntervalDays * 86_400_000);
             } else {
                 m.status = 'new';
-                m.srsIntervalDays = 1;
                 m.srsEase = Math.max(1.3, Number(m.srsEase) - 0.2);
-                m.nextReviewAt = new Date(now.getTime() + 86_400_000);
             }
         }
         await this.mistakeRepo.save(rows);

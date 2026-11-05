@@ -81,6 +81,15 @@ export class LearnerMistake {
   @Column({ name: 'next_review_at', type: 'timestamptz', nullable: true })
   nextReviewAt: Date | null;
 
+  @Column({ name: 'correct_count', type: 'int', default: 0 })
+  correctCount: number;
+
+  @Column({ name: 'lapse_count', type: 'int', default: 0 })
+  lapseCount: number;
+
+  @Column({ name: 'half_life_h', type: 'numeric', precision: 9, scale: 2, nullable: true, transformer: { to: (v: number | null) => v, from: (v: string | null) => (v == null ? null : Number(v)) } })
+  halfLifeH: number | null;
+
   @Column({ name: 'review_count', type: 'int', default: 0 })
   reviewCount: number;
 

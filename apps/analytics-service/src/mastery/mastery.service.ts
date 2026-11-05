@@ -4,6 +4,7 @@ import { DataSource, Repository } from 'typeorm';
 import { normalizeQuestionType } from '@app/common';
 import { KcRating } from './kc-rating.entity';
 import { SavedWord } from './saved-word.entity';
+import { MemoryService } from '../memory/memory.service';
 
 export type MasteryLevel = 'chua_du_du_lieu' | 'yeu' | 'dang_hoc' | 'vung' | 'thanh_thao';
 const K_LEARNER = 32;
@@ -37,6 +38,7 @@ export class MasteryService {
         @InjectRepository(KcRating) private readonly kcRepo: Repository<KcRating>,
         @InjectRepository(SavedWord) private readonly wordRepo: Repository<SavedWord>,
         private readonly dataSource: DataSource,
+        private readonly memory: MemoryService,
     ) {}
 
     /**
@@ -118,11 +120,17 @@ export class MasteryService {
     async reviewWord(id: string, learnerId: string, quality: 'again' | 'good' | 'easy') {
         const w = await this.wordRepo.findOne({ where: { id, learnerId } });
         if (!w) throw new NotFoundException('Word not found');
-        const { interval, ease } = nextWordSchedule(w, quality);
-        w.srsIntervalDays = interval;
+        const { ease } = nextWordSchedule(w, quality);
+        const u = await this.memory.review(learnerId, 'word', w.id, w, quality);
         w.srsEase = ease;
         w.reviewCount += 1;
-        w.nextReviewAt = new Date(Date.now() + interval * 86_400_000);
-        return this.wordRepo.save(w);
+        w.correctCount = u.correctCount;
+        w.lapseCount = u.lapseCount;
+        w.halfLifeH = u.halfLifeH;
+        w.lastReviewedAt = new Date();
+        w.nextReviewAt = u.nextReviewAt;
+        w.srsIntervalDays = Math.max(1, Math.round(u.halfLifeH / 24));
+        const saved = await this.wordRepo.save(w);
+        return { ...saved, pRecallBefore: Math.round(u.pPred * 100) / 100 };
     }
 }
