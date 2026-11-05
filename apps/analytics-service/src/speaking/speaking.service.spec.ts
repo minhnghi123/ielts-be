@@ -30,4 +30,16 @@ describe('speaking scoring helpers', () => {
         ], ['TH', 'S']);
         expect(out).toEqual([{ sound: 'TH', correct: false }, { sound: 'S', correct: true }]);
     });
+    it('recordAttempt ignores client-sent scores for scripted levels', async () => {
+        const saved: any[] = [];
+        const atRepo = { create: (x: any) => x, save: async (x: any) => { saved.push(x); return { ...x, id: 'a1' }; } };
+        const kcRepo = { find: async () => [], create: (x: any) => x, save: async (x: any) => x };
+        const svc = new SpeakingService({} as never, atRepo as never, kcRepo as never);
+        const r = await svc.recordAttempt('learner', {
+            level: 'word', wordResults: [{ word: 'think', status: 'substituted', heard: 'tink', sounds: [{ expected: 'TH', actual: 'T' }] }],
+            scores: { overall: 99, accuracy: 99 },
+        });
+        expect(r.attempt.scores.overall).toBe(Math.round(100 * (0 + 0.25 + 0.15)));
+        expect(r.attempt.scores.accuracy).toBe(0);
+    });
 });

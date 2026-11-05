@@ -140,12 +140,19 @@ export class SpeakingService {
         const ex = input.exerciseId ? await this.exRepo.findOne({ where: { id: input.exerciseId } }) : null;
         if (input.exerciseId && !ex) throw new NotFoundException('Không tìm thấy bài luyện nói');
         const words = input.wordResults ?? null;
-        let scores = input.scores ?? {};
-        if (words && input.level !== 'free') scores = { ...scriptedScore(words, input.wpm ?? null, input.pauses ?? null, input.durationS ?? null), ...scores };
-        if (input.level === 'free' && input.durationS && input.durationS > 0) {
-            const perMin = (n: number | null | undefined) => (n == null ? null : n / (input.durationS! / 60));
-            const fb = fluencyBand(input.wpm ?? null, perMin(input.pauses), perMin(input.fillers));
-            if (fb != null) scores = { fluencyBand: fb, ...scores };
+        // Scripted levels: scores are derived here from word_results only — anything the client sends is ignored
+        // so a learner cannot post a better score than they earned. Free level keeps the LLM rubric from the
+        // client but measured fluency always comes from the server.
+        let scores: Record<string, number | string | null> = {};
+        if (input.level !== 'free') {
+            scores = words ? scriptedScore(words, input.wpm ?? null, input.pauses ?? null, input.durationS ?? null) : {};
+        } else {
+            scores = { ...(input.scores ?? {}) };
+            if (input.durationS && input.durationS > 0) {
+                const perMin = (n: number | null | undefined) => (n == null ? null : n / (input.durationS! / 60));
+                const fb = fluencyBand(input.wpm ?? null, perMin(input.pauses), perMin(input.fillers));
+                if (fb != null) scores.fluencyBand = fb;
+            }
         }
         const attempt = await this.atRepo.save(this.atRepo.create({
             learnerId, exerciseId: ex?.id ?? null, level: input.level, audioUrl: input.audioUrl ?? null, transcript: input.transcript ?? null,
