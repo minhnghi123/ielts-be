@@ -9,6 +9,7 @@ import { AnalyticsServiceService } from '../analytics-service.service';
 const SKILLS = ['listening', 'reading', 'writing', 'speaking'] as const;
 type Skill = (typeof SKILLS)[number];
 const SKILL_VI: Record<Skill, string> = { listening: 'Listening', reading: 'Reading', writing: 'Writing', speaking: 'Speaking' };
+const SOUND_VI: Record<string, string> = { TH: '/θ/ (think)', DH: '/ð/ (this)', SH: '/ʃ/ (she)', ZH: '/ʒ/', CH: '/tʃ/ (chair)', JH: '/dʒ/ (job)', Z: '/z/', S: '/s/ cuối', T: '/t/ cuối', D: '/d/ cuối', K: '/k/ cuối', V: '/v/', W: '/w/', R: '/r/', L: '/l/ cuối', N: '/n/', NG: '/ŋ/', IY: '/iː/', IH: '/ɪ/', AE: '/æ/', EH: '/e/', AH: '/ʌ/', UW: '/uː/', UH: '/ʊ/', ER: '/ɜː/', OW: '/əʊ/', EY: '/eɪ/' };
 const TYPE_VI: Record<string, string> = {
     multiple_choice: 'Trắc nghiệm',
     fill_in_blank: 'Điền từ',
@@ -26,7 +27,7 @@ const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
 /** Monday-based week start, in UTC dates (plan dates are calendar days, not instants). */
 /** Identity of a task within a week; repeatable kinds (review/drill) include the KC so a different weakness is still issued. */
 export function taskKey(t: { taskType: string; skill: string | null; kc?: string | null }): string {
-    return `${t.taskType}:${t.skill ?? ''}${t.taskType === 'drill' ? `:${t.kc ?? ''}` : ''}`;
+    return `${t.taskType}:${t.skill ?? ''}${t.taskType === 'drill' || t.taskType === 'speaking' ? `:${t.kc ?? ''}` : ''}`;
 }
 
 export function weekStartOf(d: Date): Date {
@@ -228,10 +229,20 @@ export class PlanService {
         if (!days.has(isoDate(cursor))) cursor = addDays(cursor, -1);
         while (days.has(isoDate(cursor))) { streakDays++; cursor = addDays(cursor, -1); }
 
+        // Speaking: sounds the learner keeps missing (per-sound Elo from /speak), weakest first.
+        const weakSounds: Array<{ kc: string; rating: string; attempts: string; correct: string }> = await this.dataSource.query(
+            `SELECT kc, rating, attempts, correct FROM learner_kc_ratings
+             WHERE learner_id = $1 AND skill = 'speaking' AND kc LIKE 'ph:%' AND attempts >= 3 AND rating < 1550
+             ORDER BY rating ASC LIMIT 2`, [learnerId]);
+        const speakingAttempts7d: Array<{ n: string }> = await this.dataSource.query(
+            `SELECT count(*) n FROM speaking_attempts WHERE learner_id = $1 AND created_at >= now() - interval '7 days'`, [learnerId]);
+
         return {
             goals,
             current,
             dueReviews,
+            weakSounds: weakSounds.map((w) => ({ kc: w.kc, rating: Number(w.rating), attempts: Number(w.attempts), correct: Number(w.correct) })),
+            speakingAttempts7d: Number(speakingAttempts7d[0]?.n ?? 0),
             weak: weak.map((w) => ({ skill: w.skill as Skill, type: normalizeQuestionType(w.question_type), n: Number(w.n) })).filter((w) => w.type),
             attempts: Object.fromEntries(attemptsBySkill.map((a) => [a.skill, Number(a.n)])) as Partial<Record<Skill, number>>,
             streakDays,
@@ -278,8 +289,13 @@ export class PlanService {
         if (!doneTypes.has('writing:writing') && (gap('writing') == null || gap('writing')! > 0)) {
             cands.push({ taskType: 'writing', skill: 'writing', kc: null, refType: 'test', titleVi: 'Viết 1 bài Writing và nhận chấm AI', reasonVi: gap('writing') != null ? `Writing còn cách mục tiêu ${gap('writing')} band; mỗi tuần một bài có phản hồi là nhịp tối thiểu.` : 'Chưa có band Writing; một bài chấm AI sẽ cho điểm xuất phát.', estMinutes: 40, priority: 2, repeat: 1 });
         }
-        if (!doneTypes.has('speaking:speaking') && (gap('speaking') == null || gap('speaking')! > 0)) {
-            cands.push({ taskType: 'speaking', skill: 'speaking', kc: null, refType: 'test', titleVi: 'Luyện Speaking Part 2 với AI', reasonVi: gap('speaking') != null ? `Speaking còn cách mục tiêu ${gap('speaking')} band.` : 'Chưa có band Speaking.', estMinutes: 15, priority: 3, repeat: 1 });
+        // Speaking: fix the sounds that keep failing first (short, daily-able), then one free-speaking answer per week.
+        for (const ws of s.weakSounds) {
+            const label = SOUND_VI[ws.kc.slice(3)] ?? ws.kc.slice(3);
+            cands.push({ taskType: 'speaking', skill: 'speaking', kc: ws.kc, refType: 'drill', titleVi: `Luyện âm ${label} (5 từ)`, reasonVi: `Âm này sai ${ws.attempts - ws.correct}/${ws.attempts} lần khi luyện nói; luyện từng từ rồi mới ghép vào câu.`, estMinutes: 10, priority: 2, repeat: 2 });
+        }
+        if (gap('speaking') == null || gap('speaking')! > 0) {
+            cands.push({ taskType: 'speaking', skill: 'speaking', kc: 'free', refType: 'drill', titleVi: 'Trả lời 1 câu hỏi Speaking Part 1 (AI chấm)', reasonVi: gap('speaking') != null ? `Speaking còn cách mục tiêu ${gap('speaking')} band; ${s.speakingAttempts7d === 0 ? 'tuần này bạn chưa luyện nói.' : 'nói tự do 45 giây mỗi tuần giúp giữ độ trôi chảy.'}` : 'Chưa có band Speaking; một câu trả lời được chấm cho điểm xuất phát.', estMinutes: 10, priority: s.speakingAttempts7d === 0 ? 2 : 3, repeat: 1 });
         }
         if (cands.length === 0) {
             cands.push({ taskType: 'mock', skill: 'reading', kc: null, refType: 'test', titleVi: 'Làm 1 đề Reading để giữ phong độ', reasonVi: 'Bạn đã đạt mục tiêu ở mọi kỹ năng có dữ liệu; duy trì nhịp luyện.', estMinutes: 60, priority: 3, repeat: 1 });
