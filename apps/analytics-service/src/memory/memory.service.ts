@@ -40,7 +40,15 @@ export class MemoryService {
 
     /** Recall forecast for everything the learner is memorising, weakest first. */
     async forecast(learnerId: string, now = new Date()) {
-        const scale = await this.scale(learnerId);
+        const [{ n }]: Array<{ n: string }> = await this.dataSource.query(`SELECT count(*) n FROM memory_reviews WHERE learner_id = $1`, [learnerId]);
+        let params = await this.paramsRepo.findOne({ where: { learnerId } });
+        // Self-maintaining: once there is enough logged data, (re)fit at most once a week while the learner is looking.
+        const stale = !params?.fittedAt || now.getTime() - new Date(params.fittedAt).getTime() > 7 * 86_400_000;
+        if (Number(n) >= MIN_OBS_FOR_FIT && stale) {
+            await this.refit(learnerId);
+            params = await this.paramsRepo.findOne({ where: { learnerId } });
+        }
+        const scale = params ? Number(params.scale) : 1;
         const words: Array<{ id: string; word: string; meaning_vi: string | null; correct_count: number; lapse_count: number; half_life_h: string | null; last_reviewed_at: Date | null; next_review_at: Date | null; created_at: Date }> =
             await this.dataSource.query(`SELECT id, word, meaning_vi, correct_count, lapse_count, half_life_h, last_reviewed_at, next_review_at, created_at FROM saved_words WHERE learner_id = $1`, [learnerId]);
         const mistakes: Array<{ id: string; question_id: string; skill: string | null; question_type: string | null; correct_count: number; lapse_count: number; half_life_h: string | null; last_reviewed_at: Date | null; next_review_at: Date | null; created_at: Date }> =
@@ -55,14 +63,6 @@ export class MemoryService {
         const mistakeItems = mistakes.map((m) => ({ type: 'mistake' as const, id: m.id, questionId: m.question_id, skill: m.skill, questionType: m.question_type, ...p(m), nextReviewAt: m.next_review_at }));
         const all = [...wordItems, ...mistakeItems].sort((a, b) => a.pRecall - b.pRecall);
         const atRisk = all.filter((x) => x.pRecall < 0.7);
-        const [{ n }]: Array<{ n: string }> = await this.dataSource.query(`SELECT count(*) n FROM memory_reviews WHERE learner_id = $1`, [learnerId]);
-        let params = await this.paramsRepo.findOne({ where: { learnerId } });
-        // Self-maintaining: once there is enough logged data, (re)fit at most once a week while the learner is looking.
-        const stale = !params?.fittedAt || now.getTime() - new Date(params.fittedAt).getTime() > 7 * 86_400_000;
-        if (Number(n) >= MIN_OBS_FOR_FIT && stale) {
-            await this.refit(learnerId);
-            params = await this.paramsRepo.findOne({ where: { learnerId } });
-        }
         return {
             items: all.slice(0, 50),
             counts: { words: wordItems.length, mistakes: mistakeItems.length, atRiskWords: atRisk.filter((x) => x.type === 'word').length, atRiskMistakes: atRisk.filter((x) => x.type === 'mistake').length },
