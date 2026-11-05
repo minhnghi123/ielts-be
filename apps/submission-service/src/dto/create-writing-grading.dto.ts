@@ -62,4 +62,9 @@ export class CreateWritingGradingDto {
     @IsOptional()
     @IsObject()
     errorsJson?: Record<string, any>;
+
+    @ApiPropertyOptional({ description: 'Comparison with the previous revision' })
+    @IsOptional()
+    @IsObject()
+    diffJson?: Record<string, unknown>;
 }

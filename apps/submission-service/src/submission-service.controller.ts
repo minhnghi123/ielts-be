@@ -70,6 +70,13 @@ export class SubmissionServiceController {
         return sub;
     }
 
+    @Get('learners/:learnerId/writing-progress')
+    @ApiOperation({ summary: 'Tiến bộ Writing: chuỗi bản gốc → bản sửa (band, lỗi theo loại, so sánh) + xu hướng lỗi' })
+    getWritingProgress(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {
+        assertOwnerOrPrivileged(user, learnerId);
+        return this.service.getWritingProgress(learnerId);
+    }
+
     @Get('learners/:learnerId/writing-submissions')
     @ApiOperation({ summary: "List a learner's writing submissions" })
     getWritingByLearner(@Param('learnerId', ParseUUIDPipe) learnerId: string, @CurrentUser() user: RequestUser) {

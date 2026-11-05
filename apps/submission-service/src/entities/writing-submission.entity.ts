@@ -35,4 +35,11 @@ export class WritingSubmission {
         default: 'pending',
     })
     gradingStatus: GradingStatus;
+
+    /** Revision chain: the submission this one revises (same learner, same task). */
+    @Column({ name: 'parent_submission_id', type: 'uuid', nullable: true })
+    parentSubmissionId: string | null;
+
+    @Column({ name: 'revision_no', type: 'int', default: 0 })
+    revisionNo: number;
 }
