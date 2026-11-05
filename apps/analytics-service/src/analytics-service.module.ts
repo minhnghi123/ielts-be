@@ -15,6 +15,9 @@ import { LearnerModelController } from './learner-model/learner-model.controller
 import { QuestionHint } from './tutor/question-hint.entity';
 import { TutorService } from './tutor/tutor.service';
 import { TutorController } from './tutor/tutor.controller';
+import { LearnerMemoryParams, MemoryReview } from './memory/memory-review.entity';
+import { MemoryService } from './memory/memory.service';
+import { MemoryController } from './memory/memory.controller';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -73,9 +76,11 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
             SpeakingAttempt,
             KcFeedback,
             QuestionHint,
+            MemoryReview,
+            LearnerMemoryParams,
         ]),
     ],
-    controllers: [AnalyticsServiceController, PlanController, MasteryController, SpeakingController, LearnerModelController, TutorController],
-    providers: [AnalyticsServiceService, PlanService, MasteryService, SpeakingService, LearnerModelService, TutorService],
+    controllers: [AnalyticsServiceController, PlanController, MasteryController, SpeakingController, LearnerModelController, TutorController, MemoryController],
+    providers: [AnalyticsServiceService, PlanService, MasteryService, SpeakingService, LearnerModelService, TutorService, MemoryService],
 })
 export class AnalyticsServiceModule { }
