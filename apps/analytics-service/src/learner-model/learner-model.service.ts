@@ -59,7 +59,7 @@ export class LearnerModelService {
                     count(*) FILTER (WHERE next_review_at > now() AND next_review_at <= now() + interval '2 days') soon,
                     count(*) total FROM saved_words WHERE learner_id = $1`, [learnerId]);
         const mistakes: Array<{ error_cause: string | null; n: string }> = await this.dataSource.query(
-            `SELECT error_cause, count(*) n FROM learner_mistakes WHERE learner_id = $1 AND status <> 'fixed' GROUP BY error_cause ORDER BY n DESC LIMIT 5`, [learnerId]);
+            `SELECT COALESCE(self_cause, error_cause) error_cause, count(*) n FROM learner_mistakes WHERE learner_id = $1 AND status <> 'fixed' GROUP BY 1 ORDER BY n DESC LIMIT 5`, [learnerId]);
         const recentFeedback = await this.fbRepo.find({ where: { learnerId }, order: { createdAt: 'DESC' }, take: 20 });
         return {
             skills,

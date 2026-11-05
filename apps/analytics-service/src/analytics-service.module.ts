@@ -12,6 +12,9 @@ import { PlanService } from './plan/plan.service';
 import { KcFeedback } from './learner-model/kc-feedback.entity';
 import { LearnerModelService } from './learner-model/learner-model.service';
 import { LearnerModelController } from './learner-model/learner-model.controller';
+import { QuestionHint } from './tutor/question-hint.entity';
+import { TutorService } from './tutor/tutor.service';
+import { TutorController } from './tutor/tutor.controller';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -69,9 +72,10 @@ import { QuestionExplanation } from './entities/question-explanation.entity';
             SpeakingExercise,
             SpeakingAttempt,
             KcFeedback,
+            QuestionHint,
         ]),
     ],
-    controllers: [AnalyticsServiceController, PlanController, MasteryController, SpeakingController, LearnerModelController],
-    providers: [AnalyticsServiceService, PlanService, MasteryService, SpeakingService, LearnerModelService],
+    controllers: [AnalyticsServiceController, PlanController, MasteryController, SpeakingController, LearnerModelController, TutorController],
+    providers: [AnalyticsServiceService, PlanService, MasteryService, SpeakingService, LearnerModelService, TutorService],
 })
 export class AnalyticsServiceModule { }

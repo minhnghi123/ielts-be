@@ -199,6 +199,12 @@ export class DrillsService {
     };
   }
 
+  /** Internal: answer key for the hint route's leak guard (system role only; never exposed to learners). */
+  async answerKey(questionId: string): Promise<{ correctAnswers: string[] }> {
+    const key = await this.answerRepo.findOne({ where: { questionId } });
+    return { correctAnswers: key?.correctAnswers ?? [] };
+  }
+
   async check(
     learnerId: string,
     skill: string | undefined,
@@ -255,6 +261,7 @@ export class DrillsService {
               learnerId,
               questionId: dto.questionId,
               correct: isCorrect,
+              hintLevel: dto.hintLevel ?? undefined,
             }),
           });
         } else if (!isCorrect) {
@@ -271,6 +278,7 @@ export class DrillsService {
               correctAnswers,
               instructions: question.questionGroup?.instructions ?? null,
               errorCause,
+              hintLevel: dto.hintLevel ?? undefined,
             }),
           });
         }

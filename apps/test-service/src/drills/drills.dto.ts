@@ -8,8 +8,7 @@ import {
   IsUUID,
   Max,
   MaxLength,
-  Min,
-} from 'class-validator';
+  Min, } from 'class-validator';
 import {
   ERROR_CAUSES,
   QUESTION_TYPES,
@@ -56,4 +55,11 @@ export class CheckDrillAnswerDto {
   @IsString()
   @MaxLength(2000)
   answer: string;
+
+  @ApiPropertyOptional({ description: 'Highest hint level used before answering (1–3)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  hintLevel?: number;
 }
