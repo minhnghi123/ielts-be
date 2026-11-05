@@ -13,6 +13,10 @@ describe('taskKey', () => {
         expect(taskKey({ taskType: 'placement', skill: 'listening' })).toBe(taskKey({ taskType: 'placement', skill: 'listening', kc: null }));
         expect(taskKey({ taskType: 'mock', skill: 'reading' })).not.toBe(taskKey({ taskType: 'mock', skill: 'listening' }));
     });
+    it('keeps speaking tasks on different sounds distinct from the free-speaking task', () => {
+        expect(taskKey({ taskType: 'speaking', skill: 'speaking', kc: 'ph:TH' })).not.toBe(taskKey({ taskType: 'speaking', skill: 'speaking', kc: 'free' }));
+        expect(taskKey({ taskType: 'speaking', skill: 'speaking', kc: 'ph:TH' })).toBe(taskKey({ taskType: 'speaking', skill: 'speaking', kc: 'ph:TH' }));
+    });
     it('keeps drills on different question types distinct', () => {
         expect(taskKey({ taskType: 'drill', skill: 'reading', kc: 'matching_heading' })).not.toBe(taskKey({ taskType: 'drill', skill: 'reading', kc: 'true_false_not_given' }));
     });
