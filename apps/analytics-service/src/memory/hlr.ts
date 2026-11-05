@@ -32,15 +32,19 @@ export interface ReviewObs { lagH: number; correct: number; lapses: number; outc
 
 /** Grid-search the per-learner scale minimising log loss over logged reviews (counts are the item's counts *before* that review). */
 export function fitScale(obs: ReviewObs[]): { scale: number; logLoss: number } {
-    let best = { scale: 1, logLoss: Number.POSITIVE_INFINITY };
-    for (let s = 0.5; s <= 2.0001; s += 0.1) {
+    const lossAt = (s: number) => {
         let loss = 0;
         for (const o of obs) {
             const p = Math.min(0.999, Math.max(0.001, recallProbability(o.lagH, halfLifeHours(o.correct, o.lapses, s))));
             loss += o.outcome ? -Math.log(p) : -Math.log(1 - p);
         }
-        loss /= Math.max(1, obs.length);
-        if (loss < best.logLoss - 1e-9) best = { scale: Math.round(s * 100) / 100, logLoss: Math.round(loss * 10000) / 10000 };
+        return loss / Math.max(1, obs.length);
+    };
+    // Start from the default so that uninformative data (all ties) keeps scale = 1 instead of drifting to a grid edge.
+    let best = { scale: 1, logLoss: lossAt(1) };
+    for (let s = 0.5; s <= 2.0001; s += 0.1) {
+        const loss = lossAt(s);
+        if (loss < best.logLoss - 1e-6) best = { scale: Math.round(s * 100) / 100, logLoss: loss };
     }
-    return best;
+    return { scale: best.scale, logLoss: Math.round(best.logLoss * 10000) / 10000 };
 }

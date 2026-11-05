@@ -15,6 +15,10 @@ describe('HLR-lite', () => {
         expect(nextReviewAfterHours(48)).toBeCloseTo(48, 5);
         expect(nextReviewAfterHours(48, 0.8)).toBeLessThan(48);
     });
+    it('keeps scale 1 when the data cannot distinguish scales (fresh items, exponent 0)', () => {
+        const obs = Array.from({ length: 60 }, (_, i) => ({ lagH: 72, correct: 0, lapses: 0, outcome: i % 10 !== 0 }));
+        expect(fitScale(obs).scale).toBe(1);
+    });
     it('fits a larger scale for a learner who remembers longer than the default predicts', () => {
         const obs = Array.from({ length: 60 }, (_, i) => ({ lagH: 72, correct: 2, lapses: 0, outcome: i % 10 !== 0 }));
         expect(fitScale(obs).scale).toBeGreaterThan(1);
