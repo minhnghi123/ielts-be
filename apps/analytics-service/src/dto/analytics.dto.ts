@@ -176,4 +176,11 @@ export class ReviewMistakeDto {
     @ApiProperty({ description: 'Did the learner answer correctly this time?' })
     @IsBoolean()
     correct: boolean;
+
+    @ApiPropertyOptional({ description: 'Highest hint level used (1–3)' })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(3)
+    hintLevel?: number;
 }

@@ -165,7 +165,7 @@ export class AnalyticsServiceController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Drill answer on a notebook question → SRS update (fixed after 2 correct)' })
     reviewMistake(@Body() dto: ReviewMistakeDto) {
-        return this.service.reviewMistake(dto.learnerId, dto.questionId, dto.correct);
+        return this.service.reviewMistake(dto.learnerId, dto.questionId, dto.correct, dto.hintLevel ?? null);
     }
 
     @Post('mistakes')

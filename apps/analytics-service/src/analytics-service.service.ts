@@ -123,7 +123,7 @@ export class AnalyticsServiceService {
      * Spaced-repetition step after a drill answer. Correct twice in a row → fixed;
      * interval grows ×ease (SM-2 light). Wrong → back to new, review tomorrow.
      */
-    async reviewMistake(learnerId: string, questionId: string, correct: boolean): Promise<LearnerMistake | null> {
+    async reviewMistake(learnerId: string, questionId: string, correct: boolean, hintLevel: number | null = null): Promise<LearnerMistake | null> {
         const rows = await this.mistakeRepo.find({ where: { learnerId, questionId }, order: { createdAt: 'DESC' } });
         if (rows.length === 0) return null;
         const now = new Date();
@@ -131,6 +131,7 @@ export class AnalyticsServiceService {
             m.reviewCount += 1;
             m.lastReviewedAt = now;
             m.updatedAt = now;
+            if (hintLevel != null) m.hintLevel = hintLevel;
             if (correct) {
                 const consecutive = m.status === 'reviewing' ? 2 : 1;
                 m.srsIntervalDays = Math.max(1, Math.round(m.srsIntervalDays * (m.status === 'new' ? 1 : m.srsEase)));

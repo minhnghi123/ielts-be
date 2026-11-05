@@ -78,6 +78,9 @@ const SYSTEM_ROUTES: RouteRule[] = [
   rule('POST', /^\/api\/writing-gradings$/),
   rule('POST', /^\/api\/(writing|speaking)-submissions$/),
   rule('GET', /^\/api\/attempts\/[^/]+$/),
+  rule('PUT', /^\/api\/analytics\/explanations$/),
+  rule('PUT', /^\/api\/analytics\/tutor\/hints$/),
+  rule('GET', /^\/api\/drills\/answer-key\/[^/]+$/),
 ];
 
 function matches(rules: RouteRule[], method: string, path: string): boolean {

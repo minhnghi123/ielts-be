@@ -2,14 +2,17 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, RolesGuard } from '@app/common';
+import { CurrentUser, Roles, RolesGuard } from '@app/common';
 import type { RequestUser } from '@app/common';
 import { DrillsService } from './drills.service';
 import { BuildDrillDto, CheckDrillAnswerDto } from './drills.dto';
@@ -24,6 +27,16 @@ export class DrillsController {
     if (!user?.profileId)
       throw new ForbiddenException('Learner profile required');
     return user.profileId;
+  }
+
+  @Get('answer-key/:questionId')
+  @Roles('system', 'admin')
+  @ApiOperation({
+    summary:
+      '[Internal] Answer key for one question — used by the hint route to redact hints that would reveal the answer',
+  })
+  answerKey(@Param('questionId', ParseUUIDPipe) questionId: string) {
+    return this.drills.answerKey(questionId);
   }
 
   @Post('build')
