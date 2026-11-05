@@ -4,7 +4,7 @@ import { DataSource, Repository } from 'typeorm';
 import { MIN_OBS_FOR_FIT, fitScale, halfLifeHours, nextReviewAfterHours, recallProbability } from './hlr';
 import { LearnerMemoryParams, MemoryReview } from './memory-review.entity';
 
-export interface MemoryItem { correctCount: number; lapseCount: number; halfLifeH: number | null; lastReviewedAt: Date | null; nextReviewAt: Date | null }
+export interface MemoryItem { correctCount: number; lapseCount: number; halfLifeH: number | null; lastReviewedAt: Date | null; nextReviewAt: Date | null; createdAt?: Date | null }
 export interface MemoryUpdate { halfLifeH: number; pPred: number; lagH: number; nextReviewAt: Date; correctCount: number; lapseCount: number }
 
 /** Shared forgetting model for words and notebook mistakes: predicts recall, reschedules, logs every review for later fitting. */
@@ -25,7 +25,8 @@ export class MemoryService {
     async review(learnerId: string, itemType: 'word' | 'mistake', itemId: string, item: MemoryItem, quality: 'again' | 'good' | 'easy', now = new Date()): Promise<MemoryUpdate> {
         const scale = await this.scale(learnerId);
         const before = item.halfLifeH ?? halfLifeHours(item.correctCount, item.lapseCount, scale);
-        const anchor = item.lastReviewedAt ?? (item.nextReviewAt ? new Date(item.nextReviewAt.getTime() - before * 3_600_000) : null);
+        // Same anchor as forecast(): last review, else when the item was created (so the logged lag matches the shown prediction).
+        const anchor = item.lastReviewedAt ?? item.createdAt ?? (item.nextReviewAt ? new Date(item.nextReviewAt.getTime() - before * 3_600_000) : null);
         const lagH = anchor ? Math.max(0, (now.getTime() - anchor.getTime()) / 3_600_000) : before;
         const pPred = recallProbability(lagH, before);
         const outcome = quality !== 'again';
