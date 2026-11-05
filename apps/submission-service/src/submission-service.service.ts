@@ -202,6 +202,7 @@ export class SubmissionServiceService {
             overallBand: dto.overallBand,
             feedback: dto.feedback,
             confidenceScore: dto.confidenceScore,
+            errorsJson: dto.errorsJson ?? null,
             diffJson: (dto as { diffJson?: Record<string, any> }).diffJson ?? null,
             gradedAt: new Date(),
         });
