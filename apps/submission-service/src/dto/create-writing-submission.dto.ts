@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateWritingSubmissionDto {
@@ -15,4 +15,9 @@ export class CreateWritingSubmissionDto {
     @IsString()
     @IsNotEmpty()
     content: string;
+
+    @ApiPropertyOptional({ description: 'Submission being revised (must belong to the same learner and task)' })
+    @IsOptional()
+    @IsUUID()
+    parentSubmissionId?: string;
 }

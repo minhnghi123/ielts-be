@@ -45,6 +45,10 @@ export class AiWritingGrading {
     @Column({ name: 'errors_json', type: 'jsonb', nullable: true })
     errorsJson: Record<string, any> | null;
 
+    /** Comparison with the previous revision (null for a first submission). */
+    @Column({ name: 'diff_json', type: 'jsonb', nullable: true })
+    diffJson: Record<string, any> | null;
+
     @Column({ name: 'confidence_score', type: 'decimal', precision: 3, scale: 2, nullable: true })
     confidenceScore: number;
 
