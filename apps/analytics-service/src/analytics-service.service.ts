@@ -107,7 +107,7 @@ export class AnalyticsServiceService {
             qb.andWhere('(m.question_type = :qt OR m.mistake_type = :qt)', { qt });
         }
         if (filters.attemptId) qb.andWhere('m.attempt_id = :attemptId', { attemptId: filters.attemptId });
-        if (filters.dueOnly) qb.andWhere("m.status <> 'fixed' AND (m.next_review_at IS NULL OR m.next_review_at <= now())");
+        if (filters.dueOnly) qb.andWhere("m.status <> 'fixed' AND (m.next_review_at IS NULL OR m.next_review_at <= now() OR COALESCE(m.last_reviewed_at, m.created_at) < now() - (0.515 * COALESCE(m.half_life_h, 24)) * interval '1 hour')"); // due, or predicted recall < 0.7 (2^(-lag/h) < 0.7 ⇔ lag > 0.515·h)
         return qb.orderBy('m.created_at', 'DESC').limit(500).getMany();
     }
 
