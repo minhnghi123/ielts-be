@@ -1,4 +1,4 @@
-import { IsUUID, IsIn, IsNumber, IsOptional, Min, Max, IsString, MaxLength, IsArray, IsBoolean } from 'class-validator';
+import { IsUUID, IsIn, IsNumber, IsOptional, Min, Max, IsString, MaxLength, IsArray, IsBoolean, IsInt } from 'class-validator';
 import { ERROR_CAUSES } from '@app/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -98,6 +98,13 @@ export class CreateMistakeDto {
     @IsOptional()
     @IsIn(ERROR_CAUSES)
     errorCause?: (typeof ERROR_CAUSES)[number];
+
+    @ApiPropertyOptional({ description: 'Highest hint level used (1–3)' })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(3)
+    hintLevel?: number;
 }
 
 export class UpdateMistakeStatusDto {

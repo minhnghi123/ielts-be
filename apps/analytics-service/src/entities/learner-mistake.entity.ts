@@ -45,6 +45,14 @@ export class LearnerMistake {
   @Column({ name: 'error_cause', type: 'varchar', length: 40, nullable: true })
   errorCause: ErrorCause | null;
 
+  /** Cause the learner picked themselves after seeing the result (self-explanation); automatic cause stays in error_cause. */
+  @Column({ name: 'self_cause', type: 'varchar', length: 40, nullable: true })
+  selfCause: ErrorCause | null;
+
+  /** Highest hint level (1–3) used before answering in a drill; null when none. */
+  @Column({ name: 'hint_level', type: 'smallint', nullable: true })
+  hintLevel: number | null;
+
   @Column({ name: 'user_answer', type: 'text', nullable: true })
   userAnswer: string | null;
 

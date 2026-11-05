@@ -368,6 +368,7 @@ export class AnalyticsServiceService {
         mistake.skill = dto.skill ?? mistake.skill ?? null;
         mistake.questionType = questionType;
         mistake.errorCause = errorCause;
+        mistake.hintLevel = dto.hintLevel ?? mistake.hintLevel ?? null;
         mistake.userAnswer = dto.userAnswer ?? null;
         mistake.correctAnswer = dto.correctAnswers?.[0] ?? null;
         mistake.updatedAt = new Date();

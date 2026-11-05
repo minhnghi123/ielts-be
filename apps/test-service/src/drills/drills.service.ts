@@ -271,6 +271,7 @@ export class DrillsService {
               correctAnswers,
               instructions: question.questionGroup?.instructions ?? null,
               errorCause,
+              hintLevel: dto.hintLevel ?? undefined,
             }),
           });
         }
