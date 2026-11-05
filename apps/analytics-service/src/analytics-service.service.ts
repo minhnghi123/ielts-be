@@ -130,12 +130,13 @@ export class AnalyticsServiceService {
         if (rows.length === 0) return null;
         const now = new Date();
         for (const m of rows) {
+            // Forgetting model decides *when* (needs the previous lastReviewedAt as lag anchor, so call it before mutating);
+            // the notebook status still needs two consecutive successes to become "fixed".
+            const u = await this.memory.review(learnerId, 'mistake', m.id, m, correct ? 'good' : 'again', now);
             m.reviewCount += 1;
             m.lastReviewedAt = now;
             m.updatedAt = now;
             if (hintLevel != null) m.hintLevel = hintLevel;
-            // Forgetting model decides *when*; the notebook status still needs two consecutive successes to become "fixed".
-            const u = await this.memory.review(learnerId, 'mistake', m.id, m, correct ? 'good' : 'again', now);
             m.correctCount = u.correctCount;
             m.lapseCount = u.lapseCount;
             m.halfLifeH = u.halfLifeH;
